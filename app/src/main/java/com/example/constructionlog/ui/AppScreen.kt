@@ -53,6 +53,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -574,6 +575,7 @@ private fun DockIconButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsPage(
     authEnabled: Boolean,
@@ -594,7 +596,8 @@ private fun SettingsPage(
     modifier: Modifier = Modifier
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
-    var pdfDateText by remember { mutableStateOf(formatDate(System.currentTimeMillis())) }
+    var selectedPdfDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showPdfDatePicker by remember { mutableStateOf(false) }
     var amapKeyInput by remember { mutableStateOf("") }
     var qWeatherKeyInput by remember { mutableStateOf("") }
     var qWeatherHostInput by remember { mutableStateOf("") }
@@ -656,16 +659,26 @@ private fun SettingsPage(
                     Text("导入数据备份 (ZIP)")
                 }
 
-                OutlinedTextField(
-                    value = pdfDateText,
-                    onValueChange = { pdfDateText = it },
-                    label = { Text("PDF日期 (yyyy-MM-dd)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = formatDate(selectedPdfDateMillis),
+                        onValueChange = {},
+                        label = { Text("PDF导出日期") },
+                        readOnly = true,
+                        trailingIcon = {
+                            Icon(Icons.Rounded.EditCalendar, contentDescription = null)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { showPdfDatePicker = true }
+                    )
+                }
                 OutlinedButton(
                     onClick = {
-                        parseDate(pdfDateText)?.let(onExportPdf)
+                        onExportPdf(selectedPdfDateMillis)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -755,6 +768,26 @@ private fun SettingsPage(
                 }
             }
             }
+        }
+    }
+
+    if (showPdfDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedPdfDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showPdfDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { selectedPdfDateMillis = it }
+                        showPdfDatePicker = false
+                    }
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPdfDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 
@@ -1467,6 +1500,7 @@ private fun Editor(
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     var previewImageIndex by remember { mutableStateOf<Int?>(null) }
+    var projectExpanded by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -1483,22 +1517,39 @@ private fun Editor(
                 ) {
                     Text("基础信息", style = MaterialTheme.typography.titleLarge)
                     if (projects.isNotEmpty()) {
-                        OutlinedTextField(
-                            value = projects.firstOrNull { it.id == state.projectId }?.name ?: "未选择项目",
-                            onValueChange = {},
-                            label = { Text("所属项目") },
-                            readOnly = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(projects, key = { it.id }) { project ->
-                                AssistChip(
-                                    onClick = { onProjectChange(project.id) },
-                                    label = { Text(project.name) },
-                                    border = if (project.id == state.projectId) {
-                                        BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                    } else null
-                                )
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = projects.firstOrNull { it.id == state.projectId }?.name ?: "未选择项目",
+                                onValueChange = {},
+                                label = { Text("所属项目") },
+                                readOnly = true,
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ArrowDropDown,
+                                        contentDescription = null
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clickable { projectExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = projectExpanded,
+                                onDismissRequest = { projectExpanded = false },
+                                modifier = Modifier.fillMaxWidth(0.85f)
+                            ) {
+                                projects.forEach { project ->
+                                    DropdownMenuItem(
+                                        text = { Text(project.name) },
+                                        onClick = {
+                                            onProjectChange(project.id)
+                                            projectExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
