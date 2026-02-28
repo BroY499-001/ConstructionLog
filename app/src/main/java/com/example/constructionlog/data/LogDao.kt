@@ -58,6 +58,9 @@ interface LogDao {
     @Query("DELETE FROM log_image WHERE logId = :logId")
     suspend fun deleteImagesByLogId(logId: Long)
 
+    @Query("SELECT DISTINCT imageUri FROM log_image")
+    suspend fun getAllReferencedImageUris(): List<String>
+
     @Query("UPDATE construction_log SET deleted = 1, deletedAt = :deletedAt, updateAt = :deletedAt WHERE id = :id")
     suspend fun softDeleteLog(id: Long, deletedAt: Long)
 

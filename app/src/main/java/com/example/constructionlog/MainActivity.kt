@@ -51,6 +51,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URLEncoder
 import java.net.URL
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -279,7 +280,16 @@ class MainActivity : FragmentActivity() {
                             onSafetyChange = viewModel::updateSafety,
                             onRemarkChange = viewModel::updateRemark,
                             onRemoveImage = viewModel::removeImage,
-                            onSave = { viewModel.save {} },
+                            onSave = { 
+                                viewModel.save {
+                                    val picturesDir = context.getExternalFilesDir("Pictures") ?: context.filesDir
+                                    runOnIo(
+                                        action = { app.repository.cleanupOrphanedImages(picturesDir) },
+                                        onSuccess = {},
+                                        onError = {}
+                                    )
+                                } 
+                            },
                             authEnabled = authEnabled,
                             reauthSeconds = reauthSeconds,
                             onAuthEnabledChange = { enabled ->
@@ -470,11 +480,30 @@ class MainActivity : FragmentActivity() {
         }
 
         val ext = guessImageExtension(sourceUri)
-        val target = File(picturesDir, "IMG_${System.currentTimeMillis()}_${(0..9999).random()}.$ext")
+        val tempFile = File(picturesDir, "temp_${System.currentTimeMillis()}_${(0..9999).random()}.$ext")
+        val digest = MessageDigest.getInstance("MD5")
+        
         contentResolver.openInputStream(sourceUri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        } ?: throw IllegalStateException("无法读取图片")
-        return Uri.fromFile(target)
+            tempFile.outputStream().use { output ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                    output.write(buffer, 0, bytesRead)
+                }
+            }
+        } ?: throw IllegalStateException("无法读取图片内容")
+
+        val hash = digest.digest().joinToString("") { "%02x".format(it) }
+        val finalFile = File(picturesDir, "$hash.$ext")
+        
+        if (finalFile.exists()) {
+            tempFile.delete()
+            return Uri.fromFile(finalFile)
+        } else {
+            tempFile.renameTo(finalFile)
+            return Uri.fromFile(finalFile)
+        }
     }
 
     private fun guessImageExtension(uri: Uri): String {
@@ -539,7 +568,6 @@ class MainActivity : FragmentActivity() {
         val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
             .filter { provider -> runCatching { locationManager.isProviderEnabled(provider) }.getOrDefault(false) }
 
-        // Return a very fresh/accurate cache first to improve response speed.
         getLastKnownLocation(maxAgeMs = 2 * 60 * 1000, maxAccuracyMeters = 80f)?.let { return it }
 
         val current = coroutineScope {
@@ -776,29 +804,31 @@ class MainActivity : FragmentActivity() {
         val location = urlEncode("$longitude,$latitude")
         var lastError: Throwable? = null
         for (host in buildQWeatherHostCandidates(apiHost)) {
-            val url = URL("$host/geo/v2/city/lookup?location=$location&key=$key")
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 8000
-                readTimeout = 8000
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "ConstructionLog/1.0 (Android)")
-                setRequestProperty("X-QW-Api-Key", key)
-            }
             try {
-                val json = connection.readJson("和风地理编码")
-                if (json.optString("code") != "200") {
-                    throw IllegalStateException("和风地理编码失败(code=${json.optString("code", "-")})")
+                val url = URL("$host/geo/v2/city/lookup?location=$location&key=$key")
+                val connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "ConstructionLog/1.0 (Android)")
+                    setRequestProperty("X-QW-Api-Key", key)
                 }
-                val locations = json.optJSONArray("location") ?: throw IllegalStateException("和风地理编码为空")
-                if (locations.length() == 0) throw IllegalStateException("和风地理编码为空")
-                return locations.getJSONObject(0).optString("id", "").ifBlank {
-                    throw IllegalStateException("和风地理编码缺少地点ID")
+                try {
+                    val json = connection.readJson("和风地理编码")
+                    if (json.optString("code") != "200") {
+                        throw IllegalStateException("和风地理编码失败(code=${json.optString("code", "-")})")
+                    }
+                    val locations = json.optJSONArray("location") ?: throw IllegalStateException("和风地理编码为空")
+                    if (locations.length() == 0) throw IllegalStateException("和风地理编码为空")
+                    return locations.getJSONObject(0).optString("id", "").ifBlank {
+                        throw IllegalStateException("和风地理编码缺少地点ID")
+                    }
+                } finally {
+                    connection.disconnect()
                 }
             } catch (t: Throwable) {
                 lastError = t
-            } finally {
-                connection.disconnect()
             }
         }
         throw IllegalStateException(lastError?.message ?: "和风地理编码失败")

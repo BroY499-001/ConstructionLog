@@ -1,6 +1,8 @@
 package com.example.constructionlog.data
 
 import kotlinx.coroutines.flow.Flow
+import java.io.File
+import android.net.Uri
 
 class LogRepository(
     private val dao: LogDao
@@ -125,5 +127,27 @@ class LogRepository(
     suspend fun clearAllData() {
         dao.clearAllLogs()
         dao.clearAllProjects()
+    }
+
+    /**
+     * 清理物理存储中不再被数据库引用的孤立图片文件。
+     * @param picturesDir 存储图片的物理目录
+     */
+    suspend fun cleanupOrphanedImages(picturesDir: File) {
+        if (!picturesDir.exists() || !picturesDir.isDirectory) return
+
+        // 1. 获取数据库中所有正在被引用的图片路径（去重）
+        val referencedUris = dao.getAllReferencedImageUris().toSet()
+        
+        // 2. 遍历物理目录下的所有文件
+        picturesDir.listFiles()?.forEach { file ->
+            if (file.isFile) {
+                val fileUri = Uri.fromFile(file).toString()
+                // 3. 如果物理文件不在数据库引用列表中，则删除该文件
+                if (!referencedUris.contains(fileUri)) {
+                    file.delete()
+                }
+            }
+        }
     }
 }
