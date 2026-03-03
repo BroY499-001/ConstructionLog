@@ -90,6 +90,7 @@ class MainActivity : FragmentActivity() {
             val trash by viewModel.trash.collectAsStateWithLifecycle()
             val editor by viewModel.editorState.collectAsStateWithLifecycle()
             val projects by viewModel.projects.collectAsStateWithLifecycle()
+            val projectsLoaded by viewModel.projectsLoaded.collectAsStateWithLifecycle()
             val selectedProject by viewModel.selectedProject.collectAsStateWithLifecycle()
             val context = LocalContext.current
             val app = application as ConstructionLogApp
@@ -243,6 +244,7 @@ class MainActivity : FragmentActivity() {
                             trash = trash,
                             editorState = editor,
                             projects = projects,
+                            projectsLoaded = projectsLoaded,
                             selectedProjectId = selectedProject?.id,
                             onShowList = viewModel::showList,
                             onShowTrash = viewModel::showTrash,
@@ -308,14 +310,14 @@ class MainActivity : FragmentActivity() {
                                 reauthSeconds = seconds
                             },
                             onExportBackup = {
-                                exportBackupLauncher.launch("construction-log-backup-${System.currentTimeMillis()}.zip")
+                                exportBackupLauncher.launch("renovation-diary-backup-${System.currentTimeMillis()}.zip")
                             },
                             onImportBackup = {
                                 importBackupLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
                             },
                             onExportPdf = { dayMillis ->
                                 pendingPdfDateMillis = dayMillis
-                                exportPdfLauncher.launch("construction-log-${dayMillis}.pdf")
+                                exportPdfLauncher.launch("renovation-diary-${dayMillis}.pdf")
                             },
                             onClearAllData = {
                                 runOnIo(
@@ -761,7 +763,7 @@ class MainActivity : FragmentActivity() {
             connectTimeout = 8000
             readTimeout = 8000
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "ConstructionLog/1.0 (Android)")
+            setRequestProperty("User-Agent", "RenovationDiary/1.0 (Android)")
             setRequestProperty("X-QW-Api-Key", key)
         }
         try {
@@ -811,7 +813,7 @@ class MainActivity : FragmentActivity() {
                     connectTimeout = 8000
                     readTimeout = 8000
                     setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "ConstructionLog/1.0 (Android)")
+                    setRequestProperty("User-Agent", "RenovationDiary/1.0 (Android)")
                     setRequestProperty("X-QW-Api-Key", key)
                 }
                 try {

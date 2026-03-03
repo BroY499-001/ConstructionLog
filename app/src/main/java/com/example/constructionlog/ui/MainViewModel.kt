@@ -53,6 +53,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = emptyList()
     )
 
+    private val _projectsLoaded = MutableStateFlow(false)
+    val projectsLoaded: StateFlow<Boolean> = _projectsLoaded.asStateFlow()
+
     private val _selectedProjectId = MutableStateFlow<Long?>(null)
     val selectedProjectId: StateFlow<Long?> = _selectedProjectId.asStateFlow()
 
@@ -93,6 +96,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             repository.cleanupTrash()
+        }
+        viewModelScope.launch {
+            repository.observeProjects().collect {
+                _projectsLoaded.value = true
+            }
         }
         viewModelScope.launch {
             projects.collect { list ->

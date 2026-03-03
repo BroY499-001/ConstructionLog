@@ -1,10 +1,10 @@
-# ConstructionLog
+# 装修日记
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Android-green)
 ![minSdk](https://img.shields.io/badge/minSdk-34-purple)
 
-一款功能完备的施工日志 Android 应用，专为本地离线使用设计，注重数据安全与隐私。
+一款功能完备的装修日记 Android 应用，专为本地离线使用设计，注重数据安全与隐私。
 
 > **建议**：在下方功能介绍中添加一些应用截图或 GIF 动图，可以让项目更直观、更吸引人。
 

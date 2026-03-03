@@ -32,7 +32,7 @@ class BiometricAuthenticator(
         val prompt = BiometricPrompt(activity, executor, callback)
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("身份验证")
-            .setSubtitle("请验证后继续使用施工日志")
+            .setSubtitle("请验证后继续使用装修日记")
             .setAllowedAuthenticators(authenticators)
             .build()
 

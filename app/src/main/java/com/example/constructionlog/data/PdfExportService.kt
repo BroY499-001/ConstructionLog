@@ -47,7 +47,7 @@ class PdfExportService(
             val pageHeight = pageInfo.pageHeight.toFloat()
 
             var y = 70f
-            canvas.drawText("施工日志 ${DATE_FORMATTER.format(day)}", 40f, y, titlePaint)
+            canvas.drawText("装修日记 ${DATE_FORMATTER.format(day)}", 40f, y, titlePaint)
             y += 50f
             canvas.drawText("部位: ${item.log.location}", 40f, y, bodyPaint)
             y += 30f
