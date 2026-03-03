@@ -3,6 +3,7 @@ package com.example.constructionlog
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
@@ -10,6 +11,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.Process
+import android.provider.CalendarContract
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import android.widget.Toast
@@ -58,6 +60,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlinx.coroutines.async
@@ -91,6 +94,7 @@ class MainActivity : FragmentActivity() {
             val editor by viewModel.editorState.collectAsStateWithLifecycle()
             val projects by viewModel.projects.collectAsStateWithLifecycle()
             val projectsLoaded by viewModel.projectsLoaded.collectAsStateWithLifecycle()
+            val planTasks by viewModel.planTasks.collectAsStateWithLifecycle()
             val selectedProject by viewModel.selectedProject.collectAsStateWithLifecycle()
             val context = LocalContext.current
             val app = application as ConstructionLogApp
@@ -102,6 +106,7 @@ class MainActivity : FragmentActivity() {
             var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
             var pendingPdfDateMillis by remember { mutableStateOf<Long?>(null) }
             var pendingWeatherDateMillis by remember { mutableStateOf<Long?>(null) }
+            var pendingSystemReminder by remember { mutableStateOf<Triple<String, String, Long>?>(null) }
             var attemptedAutoWeather by remember(mode, editor.editingId) { mutableStateOf(false) }
             var amapKeyConfigured by remember { mutableStateOf(amapKeyStore.hasApiKey()) }
             var qWeatherKeyConfigured by remember { mutableStateOf(qWeatherKeyStore.hasApiKey()) }
@@ -154,6 +159,22 @@ class MainActivity : FragmentActivity() {
                 } else {
                     toast("未授予定位权限，无法自动获取天气")
                 }
+            }
+            val calendarPermissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestMultiplePermissions()
+            ) { result ->
+                val payload = pendingSystemReminder
+                val readGranted = result[Manifest.permission.READ_CALENDAR] == true
+                val writeGranted = result[Manifest.permission.WRITE_CALENDAR] == true
+                val granted = readGranted && writeGranted
+                if (granted && payload != null) {
+                    val result = createSystemReminder(payload.first, payload.second, payload.third)
+                    result.onSuccess { toast("已同步到系统提醒") }
+                        .onFailure { toast("系统提醒创建失败: ${it.message}") }
+                } else if (!granted) {
+                    toast("未授予日历读写权限，无法同步系统提醒")
+                }
+                pendingSystemReminder = null
             }
 
             val exportBackupLauncher = rememberLauncherForActivityResult(
@@ -244,6 +265,7 @@ class MainActivity : FragmentActivity() {
                             trash = trash,
                             editorState = editor,
                             projects = projects,
+                            planTasks = planTasks,
                             projectsLoaded = projectsLoaded,
                             selectedProjectId = selectedProject?.id,
                             onShowList = viewModel::showList,
@@ -280,6 +302,7 @@ class MainActivity : FragmentActivity() {
                             onWorkersChange = viewModel::updateWorkers,
                             onWorkerNamesChange = viewModel::updateWorkerNames,
                             onSafetyChange = viewModel::updateSafety,
+                            onStageChange = viewModel::updateStage,
                             onRemarkChange = viewModel::updateRemark,
                             onRemoveImage = viewModel::removeImage,
                             onSave = { 
@@ -359,6 +382,45 @@ class MainActivity : FragmentActivity() {
                                     toast("保存 Host 失败: ${it.message}")
                                 }
                             },
+                            onAddPlanTask = { title, detail, dueAt, priority ->
+                                viewModel.addPlanTask(title, detail, dueAt, priority) { result ->
+                                    result.onSuccess {
+                                        toast("计划已添加")
+                                        if (dueAt != null) {
+                                            val hasReadPermission = ContextCompat.checkSelfPermission(
+                                                context,
+                                                Manifest.permission.READ_CALENDAR
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                            val hasWritePermission = ContextCompat.checkSelfPermission(
+                                                context,
+                                                Manifest.permission.WRITE_CALENDAR
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                            if (hasReadPermission && hasWritePermission) {
+                                                createSystemReminder(title, detail, dueAt)
+                                                    .onSuccess { toast("已同步到系统提醒") }
+                                                    .onFailure { toast("系统提醒创建失败: ${it.message}") }
+                                            } else {
+                                                pendingSystemReminder = Triple(title, detail, dueAt)
+                                                calendarPermissionLauncher.launch(
+                                                    arrayOf(
+                                                        Manifest.permission.READ_CALENDAR,
+                                                        Manifest.permission.WRITE_CALENDAR
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                        .onFailure { toast("添加计划失败: ${it.message}") }
+                                }
+                            },
+                            onUpdatePlanTask = { id, title, detail, dueAt, priority ->
+                                viewModel.updatePlanTask(id, title, detail, dueAt, priority) { result ->
+                                    result.onSuccess { toast("计划已更新") }
+                                        .onFailure { toast("更新计划失败: ${it.message}") }
+                                }
+                            },
+                            onTogglePlanTask = viewModel::togglePlanTask,
+                            onDeletePlanTask = viewModel::deletePlanTask,
                             onAddFromCamera = {
                                 val dir = context.getExternalFilesDir("Pictures") ?: context.filesDir
                                 val file = File(dir, "IMG_${System.currentTimeMillis()}.jpg")
@@ -430,6 +492,72 @@ class MainActivity : FragmentActivity() {
     private fun shouldReAuth(): Boolean {
         if (backgroundAt == 0L) return false
         return System.currentTimeMillis() - backgroundAt > appSettings.getReauthSeconds() * 1000L
+    }
+
+    private fun createSystemReminder(title: String, detail: String, dueAtMillis: Long): Result<Unit> = runCatching {
+        val hasReadPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+        val hasWritePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
+        if (!hasReadPermission || !hasWritePermission) {
+            throw IllegalStateException("请先允许日历读写权限")
+        }
+        val calendarId = findWritableCalendarId() ?: throw IllegalStateException("未找到可写入日历")
+        val eventValues = ContentValues().apply {
+            put(CalendarContract.Events.CALENDAR_ID, calendarId)
+            put(CalendarContract.Events.TITLE, title)
+            put(CalendarContract.Events.DESCRIPTION, detail)
+            put(CalendarContract.Events.DTSTART, dueAtMillis)
+            put(CalendarContract.Events.DTEND, dueAtMillis + 30 * 60 * 1000L)
+            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+            put(CalendarContract.Events.HAS_ALARM, 1)
+        }
+        val eventUri = contentResolver.insert(CalendarContract.Events.CONTENT_URI, eventValues)
+            ?: throw IllegalStateException("创建系统提醒失败")
+        val eventId = eventUri.lastPathSegment?.toLongOrNull() ?: throw IllegalStateException("提醒ID无效")
+        val reminderValues = ContentValues().apply {
+            put(CalendarContract.Reminders.EVENT_ID, eventId)
+            put(CalendarContract.Reminders.MINUTES, 30)
+            put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+        }
+        contentResolver.insert(CalendarContract.Reminders.CONTENT_URI, reminderValues)
+            ?: throw IllegalStateException("提醒通知写入失败")
+    }
+
+    private fun findWritableCalendarId(): Long? {
+        val writableStrict = queryFirstCalendarId(
+            selection = "${CalendarContract.Calendars.VISIBLE}=1 AND " +
+                "${CalendarContract.Calendars.SYNC_EVENTS}=1 AND " +
+                "${CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL}>=?",
+            args = arrayOf(CalendarContract.Calendars.CAL_ACCESS_EDITOR.toString()),
+            sort = "${CalendarContract.Calendars.IS_PRIMARY} DESC, ${CalendarContract.Calendars._ID} ASC"
+        )
+        if (writableStrict != null) return writableStrict
+
+        val writableLoose = queryFirstCalendarId(
+            selection = "${CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL}>=?",
+            args = arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString()),
+            sort = "${CalendarContract.Calendars.IS_PRIMARY} DESC, ${CalendarContract.Calendars._ID} ASC"
+        )
+        if (writableLoose != null) return writableLoose
+
+        return queryFirstCalendarId(
+            selection = null,
+            args = null,
+            sort = "${CalendarContract.Calendars.IS_PRIMARY} DESC, ${CalendarContract.Calendars._ID} ASC"
+        )
+    }
+
+    private fun queryFirstCalendarId(selection: String?, args: Array<String>?, sort: String?): Long? {
+        val projection = arrayOf(CalendarContract.Calendars._ID)
+        contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI,
+            projection,
+            selection,
+            args,
+            sort
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) return cursor.getLong(0)
+        }
+        return null
     }
 
     private fun runOnIo(action: suspend () -> Unit, onSuccess: () -> Unit, onError: (Throwable) -> Unit) {

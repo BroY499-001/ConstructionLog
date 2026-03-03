@@ -14,17 +14,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF0052D9),
+    primary = Color(0xFF3370FF),
     onPrimary = Color(0xFFFFFFFF),
-    secondary = Color(0xFF2BA471),
+    primaryContainer = Color(0xFFE8F0FF),
+    onPrimaryContainer = Color(0xFF1D3D8F),
+    secondary = Color(0xFF2468F2),
     onSecondary = Color(0xFFFFFFFF),
-    tertiary = Color(0xFF4E5969),
-    background = Color(0xFFF2F3F5),
-    onBackground = Color(0xFF1D2129),
+    tertiary = Color(0xFF12B886),
+    background = Color(0xFFF5F6F8),
+    onBackground = Color(0xFF1F2329),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1D2129),
-    surfaceVariant = Color(0xFFE5E6EB),
-    onSurfaceVariant = Color(0xFF4E5969)
+    onSurface = Color(0xFF1F2329),
+    surfaceVariant = Color(0xFFF2F4F7),
+    onSurfaceVariant = Color(0xFF646A73),
+    outline = Color(0xFFD0D4DC)
 )
 
 private val DarkColors = darkColorScheme(
@@ -88,9 +91,9 @@ private val AppTypography = Typography(
 
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8),
-    small = RoundedCornerShape(12),
-    medium = RoundedCornerShape(12),
-    large = RoundedCornerShape(16)
+    small = RoundedCornerShape(10),
+    medium = RoundedCornerShape(14),
+    large = RoundedCornerShape(18)
 )
 
 @Composable

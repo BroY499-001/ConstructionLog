@@ -73,9 +73,52 @@ interface LogDao {
     @Query("DELETE FROM construction_log WHERE deleted = 1 AND deletedAt < :expiry")
     suspend fun cleanupExpiredDeleted(expiry: Long)
 
+    @Query(
+        "SELECT * FROM plan_task WHERE projectId = :projectId " +
+            "ORDER BY done ASC, " +
+            "CASE WHEN done = 0 THEN CASE WHEN dueAt IS NULL THEN 1 ELSE 0 END ELSE 0 END ASC, " +
+            "CASE WHEN done = 0 THEN dueAt END ASC, " +
+            "CASE WHEN done = 1 THEN completedAt END DESC, " +
+            "updatedAt DESC"
+    )
+    fun observePlanTasks(projectId: Long): Flow<List<PlanTaskEntity>>
+
+    @Insert
+    suspend fun insertPlanTask(task: PlanTaskEntity): Long
+
+    @Query("SELECT * FROM plan_task WHERE id = :id LIMIT 1")
+    suspend fun getPlanTaskById(id: Long): PlanTaskEntity?
+
+    @Update
+    suspend fun updatePlanTask(task: PlanTaskEntity)
+
+    @Query("UPDATE plan_task SET done = :done, completedAt = :completedAt, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updatePlanTaskDone(id: Long, done: Boolean, completedAt: Long?, updatedAt: Long)
+
+    @Query("DELETE FROM plan_task WHERE id = :id")
+    suspend fun deletePlanTask(id: Long)
+
+    @Query("SELECT * FROM quality_issue WHERE projectId = :projectId ORDER BY CASE status WHEN 'OPEN' THEN 0 WHEN 'IN_PROGRESS' THEN 1 ELSE 2 END ASC, severity DESC, updatedAt DESC")
+    fun observeQualityIssues(projectId: Long): Flow<List<QualityIssueEntity>>
+
+    @Insert
+    suspend fun insertQualityIssue(issue: QualityIssueEntity): Long
+
+    @Query("UPDATE quality_issue SET status = :status, resolvedAt = :resolvedAt, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateQualityIssueStatus(id: Long, status: String, resolvedAt: Long?, updatedAt: Long)
+
+    @Query("DELETE FROM quality_issue WHERE id = :id")
+    suspend fun deleteQualityIssue(id: Long)
+
     @Query("DELETE FROM construction_log")
     suspend fun clearAllLogs()
 
     @Query("DELETE FROM project")
     suspend fun clearAllProjects()
+
+    @Query("DELETE FROM plan_task")
+    suspend fun clearAllPlanTasks()
+
+    @Query("DELETE FROM quality_issue")
+    suspend fun clearAllQualityIssues()
 }

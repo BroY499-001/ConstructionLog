@@ -13,6 +13,10 @@ class LogRepository(
 
     fun observeTrash(projectId: Long): Flow<List<LogWithImages>> = dao.observeDeletedLogs(projectId)
 
+    fun observePlanTasks(projectId: Long): Flow<List<PlanTaskEntity>> = dao.observePlanTasks(projectId)
+
+    fun observeQualityIssues(projectId: Long): Flow<List<QualityIssueEntity>> = dao.observeQualityIssues(projectId)
+
     suspend fun addProject(name: String): Long {
         val value = name.trim()
         require(value.isNotBlank()) { "项目名称不能为空" }
@@ -63,6 +67,7 @@ class LogRepository(
         workers: Int?,
         workerNames: String,
         safety: String,
+        stage: String,
         remark: String,
         imageUris: List<String>
     ) {
@@ -78,6 +83,7 @@ class LogRepository(
                     workers = workers,
                     workerNames = workerNames,
                     safety = safety,
+                    stage = stage,
                     remark = remark,
                     createdAt = now,
                     updateAt = now
@@ -96,6 +102,7 @@ class LogRepository(
                     workers = workers,
                     workerNames = workerNames,
                     safety = safety,
+                    stage = stage,
                     remark = remark,
                     updateAt = now
                 )
@@ -125,8 +132,88 @@ class LogRepository(
     }
 
     suspend fun clearAllData() {
+        dao.clearAllPlanTasks()
+        dao.clearAllQualityIssues()
         dao.clearAllLogs()
         dao.clearAllProjects()
+    }
+
+    suspend fun addPlanTask(projectId: Long, title: String, detail: String, dueAt: Long?, priority: Int) {
+        val cleanTitle = title.trim()
+        require(cleanTitle.isNotBlank()) { "计划标题不能为空" }
+        val now = System.currentTimeMillis()
+        dao.insertPlanTask(
+            PlanTaskEntity(
+                projectId = projectId,
+                title = cleanTitle,
+                detail = detail.trim(),
+                dueAt = dueAt,
+                priority = priority.coerceIn(1, 3),
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+    }
+
+    suspend fun setPlanTaskDone(id: Long, done: Boolean) {
+        val now = System.currentTimeMillis()
+        dao.updatePlanTaskDone(id, done, if (done) now else null, now)
+    }
+
+    suspend fun deletePlanTask(id: Long) {
+        dao.deletePlanTask(id)
+    }
+
+    suspend fun updatePlanTask(id: Long, title: String, detail: String, dueAt: Long?, priority: Int) {
+        val current = dao.getPlanTaskById(id) ?: throw IllegalArgumentException("计划不存在")
+        val cleanTitle = title.trim()
+        require(cleanTitle.isNotBlank()) { "计划标题不能为空" }
+        dao.updatePlanTask(
+            current.copy(
+                title = cleanTitle,
+                detail = detail.trim(),
+                dueAt = dueAt,
+                priority = priority.coerceIn(1, 3),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun addQualityIssue(
+        projectId: Long,
+        title: String,
+        detail: String,
+        severity: Int,
+        responsible: String,
+        dueAt: Long?
+    ) {
+        val cleanTitle = title.trim()
+        require(cleanTitle.isNotBlank()) { "问题标题不能为空" }
+        val now = System.currentTimeMillis()
+        dao.insertQualityIssue(
+            QualityIssueEntity(
+                projectId = projectId,
+                title = cleanTitle,
+                detail = detail.trim(),
+                severity = severity.coerceIn(1, 3),
+                responsible = responsible.trim(),
+                dueAt = dueAt,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+    }
+
+    suspend fun updateQualityIssueStatus(id: Long, status: String) {
+        require(status == IssueStatus.OPEN || status == IssueStatus.IN_PROGRESS || status == IssueStatus.RESOLVED) {
+            "状态不合法"
+        }
+        val now = System.currentTimeMillis()
+        dao.updateQualityIssueStatus(id, status, if (status == IssueStatus.RESOLVED) now else null, now)
+    }
+
+    suspend fun deleteQualityIssue(id: Long) {
+        dao.deleteQualityIssue(id)
     }
 
     /**

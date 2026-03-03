@@ -28,6 +28,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,6 +63,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.EditCalendar
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Settings
@@ -88,6 +91,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -119,6 +123,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Velocity
 import coil.compose.AsyncImage
 import com.example.constructionlog.data.LogWithImages
+import com.example.constructionlog.data.PlanTaskEntity
 import com.example.constructionlog.data.ProjectEntity
 import java.time.Instant
 import java.time.LocalDate
@@ -138,6 +143,7 @@ fun AppScreen(
     trash: List<LogWithImages>,
     editorState: EditorState,
     projects: List<ProjectEntity>,
+    planTasks: List<PlanTaskEntity>,
     projectsLoaded: Boolean,
     selectedProjectId: Long?,
     onShowList: () -> Unit,
@@ -159,6 +165,7 @@ fun AppScreen(
     onWorkersChange: (String) -> Unit,
     onWorkerNamesChange: (String) -> Unit,
     onSafetyChange: (String) -> Unit,
+    onStageChange: (String) -> Unit,
     onRemarkChange: (String) -> Unit,
     onRemoveImage: (String) -> Unit,
     onSave: () -> Unit,
@@ -176,24 +183,31 @@ fun AppScreen(
     onSaveQWeatherKey: (String) -> Unit,
     qWeatherHostConfigured: Boolean,
     onSaveQWeatherHost: (String) -> Unit,
+    onAddPlanTask: (title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
+    onDeletePlanTask: (Long) -> Unit,
     onAddFromCamera: () -> Unit,
     onAddFromGallery: () -> Unit,
     onAutoFetchWeather: (Long) -> Unit
 ) {
     var showSettingsPage by remember { mutableStateOf(false) }
+    var showReminderPage by remember { mutableStateOf(false) }
     var showProjectManager by remember { mutableStateOf(false) }
     var showEnableConfirmDialog by remember { mutableStateOf(false) }
     var showQuickCreateMenu by remember { mutableStateOf(false) }
     var showProjectSwitchMenu by remember { mutableStateOf(false) }
     var requiredProjectName by remember { mutableStateOf("") }
     val selectedProjectName = projects.firstOrNull { it.id == selectedProjectId }?.name ?: "未选择项目"
-    val shouldHandleBack = showSettingsPage || showProjectManager || showQuickCreateMenu || showProjectSwitchMenu || mode != ScreenMode.LIST
+    val shouldHandleBack =
+        showSettingsPage || showReminderPage || showProjectManager || showQuickCreateMenu || showProjectSwitchMenu || mode != ScreenMode.LIST
 
     BackHandler(enabled = shouldHandleBack) {
         when {
             showQuickCreateMenu -> showQuickCreateMenu = false
             showProjectSwitchMenu -> showProjectSwitchMenu = false
             showProjectManager -> showProjectManager = false
+            showReminderPage -> showReminderPage = false
             showSettingsPage -> showSettingsPage = false
             mode != ScreenMode.LIST -> onShowList()
         }
@@ -201,9 +215,9 @@ fun AppScreen(
 
     val pageGradient = Brush.verticalGradient(
         listOf(
-            Color(0xFFE7F2EF),
-            Color(0xFFF5EFE2),
-            Color(0xFFF9F7F1)
+            Color(0xFFF7F9FC),
+            Color(0xFFF2F5FA),
+            Color(0xFFEEF3FB)
         )
     )
 
@@ -216,10 +230,15 @@ fun AppScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.primary
+                    ),
                     title = {
-                        if (showSettingsPage) {
+                        if (showSettingsPage || showReminderPage) {
                             Text(
-                                text = "设置",
+                                text = if (showSettingsPage) "设置" else "提醒",
                                 style = MaterialTheme.typography.headlineSmall
                             )
                         } else {
@@ -270,6 +289,15 @@ fun AppScreen(
                     actions = {
                         if (showSettingsPage) {
                             TextButton(onClick = { showSettingsPage = false }) { Text("完成") }
+                        } else if (showReminderPage) {
+                            TextButton(onClick = { showReminderPage = false }) { Text("完成") }
+                        } else if (mode == ScreenMode.LIST) {
+                            IconButton(onClick = onShowTrash) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = "回收站"
+                                )
+                            }
                         } else if (mode != ScreenMode.LIST) {
                             TextButton(onClick = onShowList) { Text("日志") }
                         }
@@ -302,6 +330,15 @@ fun AppScreen(
                     onSaveQWeatherHost = onSaveQWeatherHost,
                     modifier = Modifier.padding(padding)
                 )
+            } else if (showReminderPage) {
+                ReminderListPage(
+                    tasks = planTasks,
+                    onAddPlanTask = onAddPlanTask,
+                    onUpdatePlanTask = onUpdatePlanTask,
+                    onTogglePlanTask = onTogglePlanTask,
+                    onDeletePlanTask = onDeletePlanTask,
+                    modifier = Modifier.padding(padding)
+                )
             } else {
                 Crossfade(
                     targetState = mode,
@@ -310,8 +347,13 @@ fun AppScreen(
                     when (currentMode) {
                         ScreenMode.LIST -> CalendarHome(
                             logs = logs,
+                            planTasks = planTasks,
                             onEdit = onStartEdit,
                             onDelete = onDelete,
+                            onAddPlanTask = onAddPlanTask,
+                            onUpdatePlanTask = onUpdatePlanTask,
+                            onTogglePlanTask = onTogglePlanTask,
+                            onDeletePlanTask = onDeletePlanTask,
                             modifier = Modifier.padding(padding)
                         )
 
@@ -333,6 +375,7 @@ fun AppScreen(
                             onWorkersChange = onWorkersChange,
                             onWorkerNamesChange = onWorkerNamesChange,
                             onSafetyChange = onSafetyChange,
+                            onStageChange = onStageChange,
                             onRemarkChange = onRemarkChange,
                             onRemoveImage = onRemoveImage,
                             onSave = onSave,
@@ -346,7 +389,7 @@ fun AppScreen(
             }
         }
 
-        val showDock = mode == ScreenMode.LIST && !showSettingsPage && !showProjectManager
+        val showDock = mode == ScreenMode.LIST && !showSettingsPage && !showProjectManager && !showReminderPage
         AnimatedVisibility(
             visible = showDock,
             modifier = Modifier
@@ -363,7 +406,7 @@ fun AppScreen(
         ) {
             val dockActiveIndex = when {
                 showProjectManager -> 0
-                mode == ScreenMode.TRASH -> 1
+                showReminderPage -> 1
                 mode == ScreenMode.EDITOR -> 2
                 else -> -1
             }
@@ -377,10 +420,10 @@ fun AppScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                 ) {
                     BoxWithConstraints(
                         modifier = Modifier
@@ -401,10 +444,10 @@ fun AppScreen(
                             }
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                                 DockIconButton(
-                                    imageVector = Icons.Rounded.Delete,
-                                    contentDescription = "回收站",
+                                    imageVector = Icons.Rounded.Notifications,
+                                    contentDescription = "提醒",
                                     active = dockActiveIndex == 1,
-                                    onClick = onShowTrash
+                                    onClick = { showReminderPage = true }
                                 )
                             }
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -834,8 +877,13 @@ private fun ReauthChip(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun CalendarHome(
     logs: List<LogWithImages>,
+    planTasks: List<PlanTaskEntity>,
     onEdit: (LogWithImages) -> Unit,
     onDelete: (Long) -> Unit,
+    onAddPlanTask: (title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
+    onDeletePlanTask: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
@@ -893,6 +941,7 @@ private fun CalendarHome(
         }
     }
     val monthImageCount = remember(monthLogs) { monthLogs.sumOf { it.images.size } }
+    val stageTimeline = remember(logs) { buildStageTimeline(logs) }
 
     LazyColumn(
         modifier = modifier
@@ -1004,6 +1053,21 @@ private fun CalendarHome(
         }
 
         item {
+            StageTimelineCard(stageTimeline = stageTimeline)
+        }
+
+        item {
+            PlanTasksCard(
+                planTasks = planTasks.take(3),
+                onAddPlanTask = onAddPlanTask,
+                onUpdatePlanTask = onUpdatePlanTask,
+                onTogglePlanTask = onTogglePlanTask,
+                onDeletePlanTask = onDeletePlanTask,
+                showHeaderAction = true
+            )
+        }
+
+        item {
             Text(
                 text = "${selectedDate.format(formatter)} · ${selectedLogs.size} 条日志 · ${selectedLogs.sumOf { it.images.size }} 张图片",
                 style = MaterialTheme.typography.titleSmall,
@@ -1062,7 +1126,7 @@ private fun CalendarHome(
                             MetricChip(label = "${item.images.size} 图")
                         }
 
-                        MetricChip(label = "阶段：${estimateStageFromContent(item.log.content)}")
+                        MetricChip(label = "阶段：${item.log.stage.ifBlank { estimateStageFromContent(item.log.content) }}")
                         Text(
                             text = item.log.content,
                             style = MaterialTheme.typography.bodyMedium,
@@ -1149,6 +1213,310 @@ private fun CalendarHome(
             }
         )
     }
+}
+
+private data class StageTimelineItem(
+    val stage: String,
+    val start: LocalDate,
+    val end: LocalDate,
+    val count: Int,
+    val startRatio: Float,
+    val widthRatio: Float
+)
+
+@Composable
+private fun StageTimelineCard(stageTimeline: List<StageTimelineItem>) {
+    ElevatedCard(shape = RoundedCornerShape(18.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("施工阶段时间线（甘特）", style = MaterialTheme.typography.titleMedium)
+            if (stageTimeline.isEmpty()) {
+                Text(
+                    "暂无日志，无法生成时间线",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return@Column
+            }
+            stageTimeline.forEach { item ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(item.stage, style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "${item.start.format(formatter)} ~ ${item.end.format(formatter)} · ${item.count} 条",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(18.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        val startWeight = item.startRatio.coerceAtLeast(0f)
+                        if (startWeight > 0f) {
+                            Spacer(modifier = Modifier.weight(startWeight))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(item.widthRatio.coerceIn(0.05f, 1f))
+                                .fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.82f))
+                        )
+                        val endWeight = (1f - item.startRatio - item.widthRatio).coerceAtLeast(0f)
+                        if (endWeight > 0f) {
+                            Spacer(modifier = Modifier.weight(endWeight))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanTasksCard(
+    planTasks: List<PlanTaskEntity>,
+    onAddPlanTask: (title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
+    onDeletePlanTask: (Long) -> Unit,
+    showHeaderAction: Boolean
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingTask by remember { mutableStateOf<PlanTaskEntity?>(null) }
+    ElevatedCard(shape = RoundedCornerShape(18.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("提醒与计划", style = MaterialTheme.typography.titleMedium)
+                if (showHeaderAction) {
+                    TextButton(onClick = { showAddDialog = true }) { Text("新建计划") }
+                }
+            }
+            if (planTasks.isEmpty()) {
+                Text(
+                    "暂无计划项，建议先加验收、复检、到货提醒。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                planTasks.take(6).forEach { task ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = if (task.done) "✓ ${task.title}" else task.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                            text = buildString {
+                                append("优先级${task.priority}")
+                                task.dueAt?.let { append(" · 截止 ${formatDate(it)}") }
+                            },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Row {
+                            TextButton(onClick = { onTogglePlanTask(task.id, !task.done) }) {
+                                Text(if (task.done) "重开" else "完成")
+                            }
+                            TextButton(onClick = { editingTask = task }) { Text("编辑") }
+                            TextButton(onClick = { onDeletePlanTask(task.id) }) { Text("删除") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        ReminderEditDialog(
+            titleText = "新建提醒",
+            initialTitle = "",
+            initialDetail = "",
+            initialDueAt = null,
+            initialPriority = 2,
+            onDismiss = { showAddDialog = false },
+            onConfirm = { title, detail, dueAt, priority ->
+                onAddPlanTask(title, detail, dueAt, priority)
+                showAddDialog = false
+            }
+        )
+    }
+
+    if (editingTask != null) {
+        val target = editingTask ?: return
+        ReminderEditDialog(
+            titleText = "编辑提醒",
+            initialTitle = target.title,
+            initialDetail = target.detail,
+            initialDueAt = target.dueAt,
+            initialPriority = target.priority,
+            onDismiss = { editingTask = null },
+            onConfirm = { title, detail, dueAt, priority ->
+                onUpdatePlanTask(target.id, title, detail, dueAt, priority)
+                editingTask = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun ReminderListPage(
+    tasks: List<PlanTaskEntity>,
+    onAddPlanTask: (title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
+    onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
+    onDeletePlanTask: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            PlanTasksCard(
+                planTasks = tasks,
+                onAddPlanTask = onAddPlanTask,
+                onUpdatePlanTask = onUpdatePlanTask,
+                onTogglePlanTask = onTogglePlanTask,
+                onDeletePlanTask = onDeletePlanTask,
+                showHeaderAction = true
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderEditDialog(
+    titleText: String,
+    initialTitle: String,
+    initialDetail: String,
+    initialDueAt: Long?,
+    initialPriority: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, detail: String, dueAt: Long, priority: Int) -> Unit
+) {
+    var title by remember { mutableStateOf(initialTitle) }
+    var detail by remember { mutableStateOf(initialDetail) }
+    var priority by remember { mutableStateOf(initialPriority.coerceIn(1, 3)) }
+    var dueAt by remember { mutableStateOf(initialDueAt ?: System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(titleText) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("标题") }, singleLine = true)
+                OutlinedTextField(value = detail, onValueChange = { detail = it }, label = { Text("说明（可选）") })
+                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("提醒日期：${formatDate(dueAt)}")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1, 2, 3).forEach { value ->
+                        AssistChip(
+                            onClick = { priority = value },
+                            label = { Text("P$value") },
+                            border = if (priority == value) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(title.trim(), detail.trim(), dueAt, priority) },
+                enabled = title.isNotBlank()
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+
+    if (showDatePicker) {
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = dueAt)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dueAt = pickerState.selectedDateMillis ?: dueAt
+                    showDatePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消") } }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
+private fun buildStageTimeline(logs: List<LogWithImages>): List<StageTimelineItem> {
+    if (logs.isEmpty()) return emptyList()
+
+    val stageRanges = mutableMapOf<String, Triple<LocalDate, LocalDate, Int>>()
+    logs.forEach { item ->
+        val date = Instant.ofEpochMilli(item.log.date).atZone(ZoneId.systemDefault()).toLocalDate()
+        val stage = item.log.stage.ifBlank { estimateStageFromContent(item.log.content) }
+        val current = stageRanges[stage]
+        stageRanges[stage] = if (current == null) {
+            Triple(date, date, 1)
+        } else {
+            Triple(
+                minOf(current.first, date),
+                maxOf(current.second, date),
+                current.third + 1
+            )
+        }
+    }
+
+    val projectStart = stageRanges.values.minOf { it.first }
+    val projectEnd = stageRanges.values.maxOf { it.second }
+    val totalDays = (java.time.temporal.ChronoUnit.DAYS.between(projectStart, projectEnd) + 1).toFloat().coerceAtLeast(1f)
+
+    return stageRanges.entries
+        .sortedBy { stageOrderIndex(it.key) }
+        .map { (stage, range) ->
+            val startOffset = java.time.temporal.ChronoUnit.DAYS.between(projectStart, range.first).toFloat()
+            val widthDays = (java.time.temporal.ChronoUnit.DAYS.between(range.first, range.second) + 1).toFloat()
+            StageTimelineItem(
+                stage = stage,
+                start = range.first,
+                end = range.second,
+                count = range.third,
+                startRatio = startOffset / totalDays,
+                widthRatio = widthDays / totalDays
+            )
+        }
+}
+
+private fun stageOrderIndex(stage: String): Int {
+    val ordered = listOf("开工准备", "拆改阶段", "水电阶段", "泥瓦阶段", "木工阶段", "油工阶段", "安装阶段", "收尾验收")
+    val index = ordered.indexOf(stage)
+    return if (index >= 0) index else ordered.size + stage.hashCode().ushr(1)
 }
 
 private data class DayStat(val logCount: Int, val imageCount: Int)
@@ -1364,7 +1732,7 @@ private fun CalendarGrid(
                         Surface(
                             modifier = Modifier
                                 .width(cellWidth)
-                                .height(56.dp),
+                                .aspectRatio(1f),
                             shape = RoundedCornerShape(12.dp),
                             color = if (date == selectedDate) {
                                 MaterialTheme.colorScheme.primary
@@ -1382,7 +1750,7 @@ private fun CalendarGrid(
                                     .fillMaxSize()
                                     .clickable { onSelectDate(date) }
                                     .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 4.dp, vertical = 3.dp),
+                                    .padding(horizontal = 5.dp, vertical = 5.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 val baseColor = when {
@@ -1491,6 +1859,7 @@ private fun Editor(
     onWorkersChange: (String) -> Unit,
     onWorkerNamesChange: (String) -> Unit,
     onSafetyChange: (String) -> Unit,
+    onStageChange: (String) -> Unit,
     onRemarkChange: (String) -> Unit,
     onRemoveImage: (String) -> Unit,
     onSave: () -> Unit,
@@ -1592,6 +1961,13 @@ private fun Editor(
                         label = { Text("施工内容（必填）") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4
+                    )
+                    OutlinedTextField(
+                        value = state.stage,
+                        onValueChange = onStageChange,
+                        label = { Text("阶段（可选，留空则自动识别）") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
                 }
             }

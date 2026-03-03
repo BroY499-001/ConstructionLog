@@ -8,7 +8,6 @@ import com.example.constructionlog.ConstructionLogApp
 import com.example.constructionlog.data.ConstructionLogEntity
 import com.example.constructionlog.data.LogRepository
 import com.example.constructionlog.data.LogWithImages
-import com.example.constructionlog.data.ProjectEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +37,7 @@ data class EditorState(
     val workers: String = "",
     val workerNames: String = "",
     val safety: String = "",
+    val stage: String = "",
     val remark: String = "",
     val imageUris: List<String> = emptyList()
 ) {
@@ -72,6 +72,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val trash = _selectedProjectId
         .flatMapLatest { projectId ->
             if (projectId == null) flowOf(emptyList()) else repository.observeTrash(projectId)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
+    val planTasks = _selectedProjectId
+        .flatMapLatest { projectId ->
+            if (projectId == null) flowOf(emptyList()) else repository.observePlanTasks(projectId)
         }
         .stateIn(
             scope = viewModelScope,
@@ -139,6 +149,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             workers = item.log.workers?.toString() ?: "",
             workerNames = item.log.workerNames,
             safety = item.log.safety,
+            stage = item.log.stage,
             remark = item.log.remark,
             imageUris = item.images.map { it.imageUri }
         )
@@ -164,6 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateWorkers(value: String) = _editorState.update { it.copy(workers = value) }
     fun updateWorkerNames(value: String) = _editorState.update { it.copy(workerNames = value) }
     fun updateSafety(value: String) = _editorState.update { it.copy(safety = value) }
+    fun updateStage(value: String) = _editorState.update { it.copy(stage = value) }
     fun updateRemark(value: String) = _editorState.update { it.copy(remark = value) }
 
     fun addImages(uris: List<Uri>) {
@@ -191,6 +203,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 workers = state.workers.toIntOrNull(),
                 workerNames = state.workerNames,
                 safety = state.safety,
+                stage = state.stage,
                 remark = state.remark,
                 imageUris = state.imageUris
             )
@@ -250,5 +263,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun clearAllData() {
         repository.clearAllData()
+    }
+
+    fun addPlanTask(title: String, detail: String, dueAt: Long?, priority: Int, onDone: (Result<Unit>) -> Unit) {
+        val projectId = _selectedProjectId.value ?: run {
+            onDone(Result.failure(IllegalStateException("请先创建项目")))
+            return
+        }
+        viewModelScope.launch {
+            onDone(runCatching {
+                repository.addPlanTask(projectId, title, detail, dueAt, priority)
+            })
+        }
+    }
+
+    fun updatePlanTask(id: Long, title: String, detail: String, dueAt: Long?, priority: Int, onDone: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            onDone(runCatching {
+                repository.updatePlanTask(id, title, detail, dueAt, priority)
+            })
+        }
+    }
+
+    fun togglePlanTask(id: Long, done: Boolean) {
+        viewModelScope.launch {
+            repository.setPlanTaskDone(id, done)
+        }
+    }
+
+    fun deletePlanTask(id: Long) {
+        viewModelScope.launch {
+            repository.deletePlanTask(id)
+        }
     }
 }

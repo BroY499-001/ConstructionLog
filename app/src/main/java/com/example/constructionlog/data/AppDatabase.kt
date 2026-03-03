@@ -10,8 +10,14 @@ import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 
 @Database(
-    entities = [ProjectEntity::class, ConstructionLogEntity::class, LogImageEntity::class],
-    version = 2,
+    entities = [
+        ProjectEntity::class,
+        ConstructionLogEntity::class,
+        LogImageEntity::class,
+        PlanTaskEntity::class,
+        QualityIssueEntity::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,6 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             ).openHelperFactory(factory)
                 .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_2_3)
                 .build()
         }
 
@@ -47,6 +54,54 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("ALTER TABLE construction_log ADD COLUMN projectId INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_construction_log_projectId` ON `construction_log` (`projectId`)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE construction_log ADD COLUMN stage TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `plan_task` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `projectId` INTEGER NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `detail` TEXT NOT NULL,
+                        `dueAt` INTEGER,
+                        `done` INTEGER NOT NULL,
+                        `priority` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `completedAt` INTEGER,
+                        FOREIGN KEY(`projectId`) REFERENCES `project`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_plan_task_projectId` ON `plan_task` (`projectId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_plan_task_done` ON `plan_task` (`done`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_plan_task_dueAt` ON `plan_task` (`dueAt`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `quality_issue` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `projectId` INTEGER NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `detail` TEXT NOT NULL,
+                        `severity` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `responsible` TEXT NOT NULL,
+                        `dueAt` INTEGER,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `resolvedAt` INTEGER,
+                        FOREIGN KEY(`projectId`) REFERENCES `project`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quality_issue_projectId` ON `quality_issue` (`projectId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quality_issue_status` ON `quality_issue` (`status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quality_issue_dueAt` ON `quality_issue` (`dueAt`)")
             }
         }
     }
