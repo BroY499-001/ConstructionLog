@@ -171,8 +171,11 @@ fun AppScreen(
     onSave: () -> Unit,
     authEnabled: Boolean,
     reauthSeconds: Int,
+    autoBackupEnabled: Boolean,
+    autoBackupSummary: String,
     onAuthEnabledChange: (Boolean) -> Unit,
     onReauthSecondsChange: (Int) -> Unit,
+    onAutoBackupEnabledChange: (Boolean) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onExportPdf: (Long) -> Unit,
@@ -309,6 +312,8 @@ fun AppScreen(
                 SettingsPage(
                     authEnabled = authEnabled,
                     reauthSeconds = reauthSeconds,
+                    autoBackupEnabled = autoBackupEnabled,
+                    autoBackupSummary = autoBackupSummary,
                     onBack = { showSettingsPage = false },
                     onAuthSwitchChange = { enabled ->
                         if (enabled && !authEnabled) {
@@ -318,6 +323,7 @@ fun AppScreen(
                         }
                     },
                     onReauthSecondsChange = onReauthSecondsChange,
+                    onAutoBackupSwitchChange = onAutoBackupEnabledChange,
                     onExportBackup = onExportBackup,
                     onImportBackup = onImportBackup,
                     onExportPdf = onExportPdf,
@@ -624,9 +630,12 @@ private fun DockIconButton(
 private fun SettingsPage(
     authEnabled: Boolean,
     reauthSeconds: Int,
+    autoBackupEnabled: Boolean,
+    autoBackupSummary: String,
     onBack: () -> Unit,
     onAuthSwitchChange: (Boolean) -> Unit,
     onReauthSecondsChange: (Int) -> Unit,
+    onAutoBackupSwitchChange: (Boolean) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onExportPdf: (Long) -> Unit,
@@ -694,6 +703,25 @@ private fun SettingsPage(
                     ReauthChip(label = "30秒", selected = reauthSeconds == 30) { onReauthSecondsChange(30) }
                     ReauthChip(label = "1分钟", selected = reauthSeconds == 60) { onReauthSecondsChange(60) }
                     ReauthChip(label = "5分钟", selected = reauthSeconds == 300) { onReauthSecondsChange(300) }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth(0.82f)) {
+                        Text("自动备份", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            autoBackupSummary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = autoBackupEnabled,
+                        onCheckedChange = onAutoBackupSwitchChange
+                    )
                 }
 
                 OutlinedButton(onClick = onExportBackup, modifier = Modifier.fillMaxWidth()) {
@@ -873,7 +901,7 @@ private fun ReauthChip(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun CalendarHome(
     logs: List<LogWithImages>,
@@ -890,6 +918,7 @@ private fun CalendarHome(
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var monthExpanded by remember { mutableStateOf(false) }
     var showMonthPicker by remember { mutableStateOf(false) }
+    var pendingDeleteLog by remember { mutableStateOf<LogWithImages?>(null) }
     var pickerYear by remember { mutableStateOf(currentMonth.year) }
     val listState = rememberLazyListState()
     var pullDelta by remember { mutableStateOf(0f) }
@@ -1104,7 +1133,10 @@ private fun CalendarHome(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onEdit(item) },
+                        .combinedClickable(
+                            onClick = { onEdit(item) },
+                            onLongClick = { pendingDeleteLog = item }
+                        ),
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -1118,12 +1150,34 @@ private fun CalendarHome(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "${formatDate(item.log.date)}  ${item.log.weather.ifBlank { "天气未知" }}",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            MetricChip(label = "${item.images.size} 图")
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "${formatDate(item.log.date)}  ${item.log.weather.ifBlank { "天气未知" }}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "点击编辑，长按或右上角删除",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                MetricChip(label = "${item.images.size} 图")
+                                IconButton(onClick = { pendingDeleteLog = item }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = "删除日志",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
                         }
 
                         MetricChip(label = "阶段：${item.log.stage.ifBlank { estimateStageFromContent(item.log.content) }}")
@@ -1209,6 +1263,31 @@ private fun CalendarHome(
             confirmButton = {
                 TextButton(onClick = { showMonthPicker = false }) {
                     Text("完成")
+                }
+            }
+        )
+    }
+
+    pendingDeleteLog?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteLog = null },
+            title = { Text("删除这条日志？") },
+            text = {
+                Text("删除后会先移到回收站，可在 30 天内恢复。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(target.log.id)
+                        pendingDeleteLog = null
+                    }
+                ) {
+                    Text("确认删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteLog = null }) {
+                    Text("取消")
                 }
             }
         )

@@ -44,6 +44,7 @@ import com.example.constructionlog.data.AppSettings
 import com.example.constructionlog.data.BackupService
 import com.example.constructionlog.data.PdfExportService
 import com.example.constructionlog.data.QWeatherKeyStore
+import com.example.constructionlog.data.backup.AutoBackupScheduler
 import com.example.constructionlog.security.BiometricAuthenticator
 import com.example.constructionlog.ui.AppScreen
 import com.example.constructionlog.ui.MainViewModel
@@ -103,6 +104,7 @@ class MainActivity : FragmentActivity() {
 
             var authEnabled by remember { mutableStateOf(appSettings.isAppAuthEnabled()) }
             var reauthSeconds by remember { mutableStateOf(appSettings.getReauthSeconds()) }
+            var autoBackupEnabled by remember { mutableStateOf(appSettings.isAutoBackupEnabled()) }
             var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
             var pendingPdfDateMillis by remember { mutableStateOf<Long?>(null) }
             var pendingWeatherDateMillis by remember { mutableStateOf<Long?>(null) }
@@ -307,16 +309,23 @@ class MainActivity : FragmentActivity() {
                             onRemoveImage = viewModel::removeImage,
                             onSave = { 
                                 viewModel.save {
-                                    val picturesDir = context.getExternalFilesDir("Pictures") ?: context.filesDir
                                     runOnIo(
-                                        action = { app.repository.cleanupOrphanedImages(picturesDir) },
+                                        action = {
+                                            val picturesDir = context.getExternalFilesDir("Pictures") ?: context.filesDir
+                                            app.repository.cleanupOrphanedImages(picturesDir)
+                                            if (autoBackupEnabled) {
+                                                backupService.exportAutoBackup().getOrThrow()
+                                            }
+                                        },
                                         onSuccess = {},
-                                        onError = {}
+                                        onError = { toast("自动备份失败: ${it.message}") }
                                     )
                                 } 
                             },
                             authEnabled = authEnabled,
                             reauthSeconds = reauthSeconds,
+                            autoBackupEnabled = autoBackupEnabled,
+                            autoBackupSummary = "自动覆盖 ${backupService.autoBackupDisplayName()}，保存日志后立即更新，并由系统定时兜底。",
                             onAuthEnabledChange = { enabled ->
                                 appSettings.setAppAuthEnabled(enabled)
                                 authEnabled = enabled
@@ -332,8 +341,21 @@ class MainActivity : FragmentActivity() {
                                 appSettings.setReauthSeconds(seconds)
                                 reauthSeconds = seconds
                             },
+                            onAutoBackupEnabledChange = { enabled ->
+                                appSettings.setAutoBackupEnabled(enabled)
+                                autoBackupEnabled = enabled
+                                if (enabled) {
+                                    AutoBackupScheduler.schedule(context)
+                                    AutoBackupScheduler.requestImmediate(context)
+                                    toast("自动备份已开启")
+                                } else {
+                                    AutoBackupScheduler.cancel(context)
+                                    backupService.deleteAutoBackup()
+                                    toast("自动备份已关闭")
+                                }
+                            },
                             onExportBackup = {
-                                exportBackupLauncher.launch("renovation-diary-backup-${System.currentTimeMillis()}.zip")
+                                exportBackupLauncher.launch(backupService.manualBackupFileName())
                             },
                             onImportBackup = {
                                 importBackupLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
