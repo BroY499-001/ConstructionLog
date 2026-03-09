@@ -1,13 +1,13 @@
-package com.example.constructionlog.ui
+package com.constructionlog.app.ui
 
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.constructionlog.ConstructionLogApp
-import com.example.constructionlog.data.ConstructionLogEntity
-import com.example.constructionlog.data.LogRepository
-import com.example.constructionlog.data.LogWithImages
+import com.constructionlog.app.ConstructionLogApp
+import com.constructionlog.app.data.ConstructionLogEntity
+import com.constructionlog.app.data.LogRepository
+import com.constructionlog.app.data.LogWithImages
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

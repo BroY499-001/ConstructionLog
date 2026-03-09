@@ -16,7 +16,7 @@ if (localPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.constructionlog"
+    namespace = "com.constructionlog.app"
     compileSdk = 35
 
     signingConfigs {
@@ -29,11 +29,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.constructionlog"
+        applicationId = "com.constructionlog.app"
         minSdk = 34
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -1,4 +1,4 @@
-package com.example.constructionlog.ui
+package com.constructionlog.app.ui
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -122,9 +122,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Velocity
 import coil.compose.AsyncImage
-import com.example.constructionlog.data.LogWithImages
-import com.example.constructionlog.data.PlanTaskEntity
-import com.example.constructionlog.data.ProjectEntity
+import com.constructionlog.app.data.LogWithImages
+import com.constructionlog.app.data.PlanTaskEntity
+import com.constructionlog.app.data.ProjectEntity
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -1849,6 +1849,11 @@ private fun CalendarGrid(
                                 )
                                 stats[date]?.let { stat ->
                                     if (stat.logCount > 0) {
+                                        val markerColor = if (date == selectedDate) {
+                                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.92f)
+                                        } else {
+                                            Color(0xFFC2410C)
+                                        }
                                         Box(
                                             modifier = Modifier
                                                 .size(6.dp)
@@ -1857,7 +1862,7 @@ private fun CalendarGrid(
                                                     scaleY = dotScale
                                                 }
                                                 .clip(RoundedCornerShape(3.dp))
-                                                .background(Color(0xFF2BA471))
+                                                .background(markerColor)
                                         )
                                     } else {
                                         Spacer(modifier = Modifier.size(6.dp))

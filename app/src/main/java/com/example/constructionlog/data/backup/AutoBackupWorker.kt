@@ -1,10 +1,10 @@
-package com.example.constructionlog.data.backup
+package com.constructionlog.app.data.backup
 
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.constructionlog.data.AppSettings
-import com.example.constructionlog.data.BackupService
+import com.constructionlog.app.data.AppSettings
+import com.constructionlog.app.data.BackupService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

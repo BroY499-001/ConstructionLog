@@ -1,4 +1,4 @@
-package com.example.constructionlog.security
+package com.constructionlog.app.security
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt

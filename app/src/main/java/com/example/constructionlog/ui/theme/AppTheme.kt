@@ -1,4 +1,4 @@
-package com.example.constructionlog.ui.theme
+package com.constructionlog.app.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -14,33 +14,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF3370FF),
+    primary = Color(0xFFE65100),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE8F0FF),
-    onPrimaryContainer = Color(0xFF1D3D8F),
-    secondary = Color(0xFF2468F2),
+    primaryContainer = Color(0xFFFFCC80),
+    onPrimaryContainer = Color(0xFF3E1E00),
+    secondary = Color(0xFF00897B),
     onSecondary = Color(0xFFFFFFFF),
-    tertiary = Color(0xFF12B886),
-    background = Color(0xFFF5F6F8),
+    secondaryContainer = Color(0xFF80CBC4),
+    onSecondaryContainer = Color(0xFF003730),
+    tertiary = Color(0xFF795548),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFBCAAA4),
+    onTertiaryContainer = Color(0xFF2A170F),
+    background = Color(0xFFFAFAFA),
     onBackground = Color(0xFF1F2329),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1F2329),
-    surfaceVariant = Color(0xFFF2F4F7),
-    onSurfaceVariant = Color(0xFF646A73),
-    outline = Color(0xFFD0D4DC)
+    surfaceVariant = Color(0xFFF5F5F5),
+    onSurfaceVariant = Color(0xFF757575),
+    outline = Color(0xFFE0E0E0)
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF70D4C0),
-    onPrimary = Color(0xFF003730),
-    secondary = Color(0xFFFFB680),
-    onSecondary = Color(0xFF4A2500),
-    tertiary = Color(0xFFA6CBFF),
-    background = Color(0xFF151311),
+    primary = Color(0xFFFF8F00),
+    onPrimary = Color(0xFF3E1E00),
+    secondary = Color(0xFF00BCD4),
+    onSecondary = Color(0xFF003730),
+    tertiary = Color(0xFF8D6E63),
+    onTertiary = Color(0xFF2A170F),
+    background = Color(0xFF121212),
     onBackground = Color(0xFFECE1D6),
-    surface = Color(0xFF1D1A18),
+    surface = Color(0xFF1E1E1E),
     onSurface = Color(0xFFECE1D6),
-    surfaceVariant = Color(0xFF48413A),
+    surfaceVariant = Color(0xFF2D2D2D),
     onSurfaceVariant = Color(0xFFD0C5B8)
 )
 

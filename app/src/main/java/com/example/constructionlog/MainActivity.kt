@@ -1,4 +1,4 @@
-package com.example.constructionlog
+package com.constructionlog.app
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -39,17 +39,17 @@ import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.example.constructionlog.data.AmapKeyStore
-import com.example.constructionlog.data.AppSettings
-import com.example.constructionlog.data.BackupService
-import com.example.constructionlog.data.PdfExportService
-import com.example.constructionlog.data.QWeatherKeyStore
-import com.example.constructionlog.data.backup.AutoBackupScheduler
-import com.example.constructionlog.security.BiometricAuthenticator
-import com.example.constructionlog.ui.AppScreen
-import com.example.constructionlog.ui.MainViewModel
-import com.example.constructionlog.ui.ScreenMode
-import com.example.constructionlog.ui.theme.ConstructionLogTheme
+import com.constructionlog.app.data.AmapKeyStore
+import com.constructionlog.app.data.AppSettings
+import com.constructionlog.app.data.BackupService
+import com.constructionlog.app.data.PdfExportService
+import com.constructionlog.app.data.QWeatherKeyStore
+import com.constructionlog.app.data.backup.AutoBackupScheduler
+import com.constructionlog.app.security.BiometricAuthenticator
+import com.constructionlog.app.ui.AppScreen
+import com.constructionlog.app.ui.MainViewModel
+import com.constructionlog.app.ui.ScreenMode
+import com.constructionlog.app.ui.theme.ConstructionLogTheme
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URLEncoder
@@ -197,7 +197,6 @@ class MainActivity : FragmentActivity() {
                 if (uri != null) {
                     runOnIo(
                         action = {
-                            app.database.close()
                             backupService.importBackup(uri).getOrThrow()
                         },
                         onSuccess = {

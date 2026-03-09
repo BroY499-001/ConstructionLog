@@ -1,9 +1,10 @@
-package com.example.constructionlog.data
+package com.constructionlog.app.data
 
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.util.Base64
+import com.constructionlog.app.ConstructionLogApp
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.DataInputStream
@@ -21,6 +22,7 @@ import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.CipherInputStream
 import javax.crypto.CipherOutputStream
@@ -100,6 +102,8 @@ class BackupService(
             val walFromBackup = File(tempDir, "database.sqlite-wal")
             val shmFromBackup = File(tempDir, "database.sqlite-shm")
 
+            (context.applicationContext as? ConstructionLogApp)?.database?.close()
+
             val dbFile = context.getDatabasePath(DB_NAME)
             dbFile.parentFile?.mkdirs()
             if (dbFile.exists()) dbFile.delete()
@@ -124,6 +128,18 @@ class BackupService(
                     }
                 }
             }
+
+            // 4. 恢复 SharedPreferences（API Key、设置等）
+            val prefsDir = File(context.dataDir.absolutePath, "shared_prefs")
+            val backupPrefsDir = File(tempDir, "shared_prefs")
+            if (backupPrefsDir.exists()) {
+                prefsDir.mkdirs()
+                backupPrefsDir.listFiles()?.forEach { file ->
+                    if (file.isFile) {
+                        file.copyTo(File(prefsDir, file.name), overwrite = true)
+                    }
+                }
+            }
         } finally {
             tempDir.deleteRecursively()
         }
@@ -131,12 +147,14 @@ class BackupService(
 
     private fun buildRawZip(targetZipFile: File, dbFile: File): String {
         ZipOutputStream(FileOutputStream(targetZipFile)).use { zip ->
+            // 1. 备份数据库
             addFileToZip(zip, dbFile, "database.sqlite")
             val walFile = File(dbFile.parentFile, "${dbFile.name}-wal")
             val shmFile = File(dbFile.parentFile, "${dbFile.name}-shm")
             if (walFile.exists()) addFileToZip(zip, walFile, "database.sqlite-wal")
             if (shmFile.exists()) addFileToZip(zip, shmFile, "database.sqlite-shm")
 
+            // 2. 备份图片
             val imageDir = context.getExternalFilesDir("Pictures")
             if (imageDir != null && imageDir.exists()) {
                 imageDir.listFiles()?.forEach { file ->
@@ -146,10 +164,21 @@ class BackupService(
                 }
             }
 
+            // 3. 备份 SharedPreferences（API Key、设置等）
+            val prefsDir = File(context.dataDir.absolutePath, "shared_prefs")
+            if (prefsDir.exists()) {
+                prefsDir.listFiles()?.forEach { file ->
+                    if (file.isFile && file.extension == "xml") {
+                        addFileToZip(zip, file, "shared_prefs/${file.name}")
+                    }
+                }
+            }
+
             val metadata = JSONObject()
-                .put("version", 1)
+                .put("version", 2)
                 .put("exportTime", System.currentTimeMillis())
                 .put("app", "construction-log")
+                .put("includesSharedPrefs", true)
                 .toString()
             zip.putNextEntry(ZipEntry("metadata.json"))
             zip.write(metadata.toByteArray())
@@ -192,31 +221,12 @@ class BackupService(
 
     private fun encryptFileToOutput(sourceFile: File, output: OutputStream, iv: ByteArray) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
+        cipher.init(Cipher.ENCRYPT_MODE, exportSecretKey(), GCMParameterSpec(128, iv))
         CipherOutputStream(output, cipher).use { cipherOutput ->
             FileInputStream(sourceFile).use { input ->
                 input.copyTo(cipherOutput)
             }
         }
-    }
-
-    private fun decryptToFile(input: InputStream, targetFile: File, iv: ByteArray): String {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
-        val digest = MessageDigest.getInstance("SHA-256")
-        CipherInputStream(input, cipher).use { cipherInput ->
-            FileOutputStream(targetFile).use { fileOutput ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val read = cipherInput.read(buffer)
-                    if (read == -1) break
-                    digest.update(buffer, 0, read)
-                    fileOutput.write(buffer, 0, read)
-                }
-                fileOutput.flush()
-            }
-        }
-        return digest.digest().toHexString()
     }
 
     private fun isBinaryBackup(input: BufferedInputStream): Boolean {
@@ -241,7 +251,11 @@ class BackupService(
         dataInput.readFully(shaBytes)
         val expectedSha = String(shaBytes, Charsets.US_ASCII)
 
-        val actualSha = decryptToFile(dataInput, targetZipFile, iv)
+        val encryptedPayload = dataInput.readBytes()
+        targetZipFile.outputStream().use { output ->
+            output.write(decryptWithFallback(encryptedPayload, iv))
+        }
+        val actualSha = sha256Hex(targetZipFile)
         if (!actualSha.equals(expectedSha, ignoreCase = true)) {
             throw IllegalStateException("备份完整性校验失败")
         }
@@ -251,13 +265,14 @@ class BackupService(
         val payloadText = input.bufferedReader().readText()
         val payload = JSONObject(payloadText)
         val version = payload.optInt("version", -1)
-        if (version != 1) throw IllegalStateException("备份版本不兼容")
+        // 支持 version 1 和 version 2
+        if (version != 1 && version != 2) throw IllegalStateException("备份版本不兼容")
 
         val iv = Base64.decode(payload.getString("iv"), Base64.NO_WRAP)
         val encrypted = Base64.decode(payload.getString("data"), Base64.NO_WRAP)
         val expectedSha = payload.getString("sha256")
 
-        targetZipFile.outputStream().use { it.write(decrypt(encrypted, iv)) }
+        targetZipFile.outputStream().use { it.write(decryptWithFallback(encrypted, iv)) }
         val actualSha = sha256Hex(targetZipFile)
         if (!actualSha.equals(expectedSha, ignoreCase = true)) {
             throw IllegalStateException("备份完整性校验失败")
@@ -292,15 +307,36 @@ class BackupService(
         }
     }
 
-    private fun decrypt(data: ByteArray, iv: ByteArray): ByteArray {
+    private fun decrypt(data: ByteArray, iv: ByteArray, secretKey: SecretKeySpec): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
         return cipher.doFinal(data)
     }
 
-    private fun secretKey(): SecretKeySpec {
-        val base = "${context.packageName}:construction-log-backup"
-        val hash = MessageDigest.getInstance("SHA-256").digest(base.toByteArray())
+    private fun decryptWithFallback(data: ByteArray, iv: ByteArray): ByteArray {
+        var lastError: Throwable? = null
+        candidateSecretKeys().forEach { secretKey ->
+            try {
+                return decrypt(data, iv, secretKey)
+            } catch (error: AEADBadTagException) {
+                lastError = error
+            } catch (error: IllegalStateException) {
+                lastError = error
+            }
+        }
+        throw IllegalStateException("备份解密失败，当前应用与备份使用的标识不兼容", lastError)
+    }
+
+    private fun exportSecretKey(): SecretKeySpec = secretKeyForSeed(STABLE_BACKUP_KEY_SEED)
+
+    private fun candidateSecretKeys(): List<SecretKeySpec> = listOf(
+        secretKeyForSeed(STABLE_BACKUP_KEY_SEED),
+        secretKeyForSeed("${context.packageName}:construction-log-backup"),
+        secretKeyForSeed("$LEGACY_PACKAGE_NAME:construction-log-backup")
+    ).distinctBy { it.encoded?.toList() ?: emptyList() }
+
+    private fun secretKeyForSeed(seed: String): SecretKeySpec {
+        val hash = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray())
         return SecretKeySpec(hash.copyOfRange(0, 16), "AES")
     }
 
@@ -326,5 +362,7 @@ class BackupService(
         private val BACKUP_MAGIC = byteArrayOf('C'.code.toByte(), 'L'.code.toByte(), 'B'.code.toByte(), 'K'.code.toByte(), 2)
         private const val SHA256_HEX_LENGTH = 64
         private const val AUTO_BACKUP_FILE_NAME = "construction-log-auto-backup.zip"
+        private const val LEGACY_PACKAGE_NAME = "com.example.constructionlog"
+        private const val STABLE_BACKUP_KEY_SEED = "construction-log-backup-key-v1"
     }
 }

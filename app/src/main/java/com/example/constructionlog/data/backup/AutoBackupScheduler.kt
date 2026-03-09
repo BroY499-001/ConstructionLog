@@ -1,4 +1,4 @@
-package com.example.constructionlog.data.backup
+package com.constructionlog.app.data.backup
 
 import android.content.Context
 import androidx.work.BackoffPolicy
@@ -9,7 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.example.constructionlog.data.AppSettings
+import com.constructionlog.app.data.AppSettings
 import java.util.concurrent.TimeUnit
 
 object AutoBackupScheduler {

@@ -1,4 +1,4 @@
-package com.example.constructionlog.data
+package com.constructionlog.app.data
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -60,6 +60,12 @@ interface LogDao {
 
     @Query("SELECT DISTINCT imageUri FROM log_image")
     suspend fun getAllReferencedImageUris(): List<String>
+
+    @Query("SELECT * FROM log_image")
+    suspend fun getAllImages(): List<LogImageEntity>
+
+    @Query("UPDATE log_image SET imageUri = :imageUri WHERE id = :id")
+    suspend fun updateImageUri(id: Long, imageUri: String)
 
     @Query("UPDATE construction_log SET deleted = 1, deletedAt = :deletedAt, updateAt = :deletedAt WHERE id = :id")
     suspend fun softDeleteLog(id: Long, deletedAt: Long)

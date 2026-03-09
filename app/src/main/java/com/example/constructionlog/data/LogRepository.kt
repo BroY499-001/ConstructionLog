@@ -1,4 +1,4 @@
-package com.example.constructionlog.data
+package com.constructionlog.app.data
 
 import kotlinx.coroutines.flow.Flow
 import java.io.File
@@ -234,6 +234,26 @@ class LogRepository(
                 if (!referencedUris.contains(fileUri)) {
                     file.delete()
                 }
+            }
+        }
+    }
+
+    suspend fun migrateImageUrisToDirectory(picturesDir: File) {
+        if (!picturesDir.exists() || !picturesDir.isDirectory) return
+
+        dao.getAllImages().forEach { image ->
+            val uri = Uri.parse(image.imageUri)
+            if (uri.scheme != "file") return@forEach
+
+            val fileName = File(uri.path ?: return@forEach).name
+            if (fileName.isBlank()) return@forEach
+
+            val migratedFile = File(picturesDir, fileName)
+            if (!migratedFile.exists()) return@forEach
+
+            val migratedUri = Uri.fromFile(migratedFile).toString()
+            if (migratedUri != image.imageUri) {
+                dao.updateImageUri(image.id, migratedUri)
             }
         }
     }

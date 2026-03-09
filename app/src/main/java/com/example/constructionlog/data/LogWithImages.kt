@@ -1,4 +1,4 @@
-package com.example.constructionlog.data
+package com.constructionlog.app.data
 
 import androidx.room.Embedded
 import androidx.room.Relation
