@@ -1,6 +1,7 @@
 package com.constructionlog.app.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -36,18 +37,25 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFFF8F00),
-    onPrimary = Color(0xFF3E1E00),
-    secondary = Color(0xFF00BCD4),
-    onSecondary = Color(0xFF003730),
-    tertiary = Color(0xFF8D6E63),
-    onTertiary = Color(0xFF2A170F),
-    background = Color(0xFF121212),
-    onBackground = Color(0xFFECE1D6),
-    surface = Color(0xFF1E1E1E),
-    onSurface = Color(0xFFECE1D6),
-    surfaceVariant = Color(0xFF2D2D2D),
-    onSurfaceVariant = Color(0xFFD0C5B8)
+    primary = Color(0xFFFFA042),
+    onPrimary = Color(0xFF3C1C00),
+    primaryContainer = Color(0xFF6A3B00),
+    onPrimaryContainer = Color(0xFFFFD7AE),
+    secondary = Color(0xFF4DD0C6),
+    onSecondary = Color(0xFF003731),
+    secondaryContainer = Color(0xFF0F4D48),
+    onSecondaryContainer = Color(0xFFB7F1EC),
+    tertiary = Color(0xFFC2A193),
+    onTertiary = Color(0xFF3C251B),
+    tertiaryContainer = Color(0xFF5A3B2F),
+    onTertiaryContainer = Color(0xFFFFE0D1),
+    background = Color(0xFF141210),
+    onBackground = Color(0xFFEFE4D8),
+    surface = Color(0xFF1C1916),
+    onSurface = Color(0xFFEFE4D8),
+    surfaceVariant = Color(0xFF2E2924),
+    onSurfaceVariant = Color(0xFFD1C5B8),
+    outline = Color(0xFF564E46)
 )
 
 private val AppTypography = Typography(
@@ -104,8 +112,9 @@ private val AppShapes = Shapes(
 
 @Composable
 fun ConstructionLogTheme(content: @Composable () -> Unit) {
+    val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
     MaterialTheme(
-        colorScheme = LightColors,
+        colorScheme = colors,
         typography = AppTypography,
         shapes = AppShapes,
         content = content

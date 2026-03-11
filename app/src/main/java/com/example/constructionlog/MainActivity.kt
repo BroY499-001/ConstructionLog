@@ -38,6 +38,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.lifecycleScope
 import com.constructionlog.app.data.AmapKeyStore
 import com.constructionlog.app.data.AppSettings
@@ -46,7 +47,7 @@ import com.constructionlog.app.data.PdfExportService
 import com.constructionlog.app.data.QWeatherKeyStore
 import com.constructionlog.app.data.backup.AutoBackupScheduler
 import com.constructionlog.app.security.BiometricAuthenticator
-import com.constructionlog.app.ui.AppScreen
+import com.constructionlog.app.ui.AppNavigation
 import com.constructionlog.app.ui.MainViewModel
 import com.constructionlog.app.ui.ScreenMode
 import com.constructionlog.app.ui.theme.ConstructionLogTheme
@@ -254,14 +255,15 @@ class MainActivity : FragmentActivity() {
             }
 
             ConstructionLogTheme {
+                val navController = rememberNavController()
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .then(if (authGateVisible) Modifier.blur(16.dp) else Modifier)
                     ) {
-                        AppScreen(
-                            mode = mode,
+                        AppNavigation(
+                            navController = navController,
                             logs = logs,
                             trash = trash,
                             editorState = editor,
