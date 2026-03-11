@@ -24,8 +24,6 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
-import javax.crypto.CipherInputStream
-import javax.crypto.CipherOutputStream
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
@@ -62,12 +60,20 @@ class BackupService(
         return !file.exists() || file.delete()
     }
 
+    /**
+     * 将自动备份路径改为公共下载文件夹
+     */
     fun autoBackupFile(): File {
-        val baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-        return File(baseDir, "backups/$AUTO_BACKUP_FILE_NAME")
+        // 使用公共下载目录：/storage/emulated/0/Download
+        val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val backupDir = File(downloadDir, "ConstructionLog")
+        if (!backupDir.exists()) {
+            backupDir.mkdirs()
+        }
+        return File(backupDir, AUTO_BACKUP_FILE_NAME)
     }
 
-    fun autoBackupDisplayName(): String = "backups/$AUTO_BACKUP_FILE_NAME"
+    fun autoBackupDisplayName(): String = "下载/ConstructionLog/$AUTO_BACKUP_FILE_NAME"
 
     fun manualBackupFileName(timeMillis: Long = System.currentTimeMillis()): String {
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmmss", Locale.US)
@@ -129,7 +135,6 @@ class BackupService(
                 }
             }
 
-            // 4. 恢复 SharedPreferences（API Key、设置等）
             val prefsDir = File(context.dataDir.absolutePath, "shared_prefs")
             val backupPrefsDir = File(tempDir, "shared_prefs")
             if (backupPrefsDir.exists()) {
@@ -145,16 +150,14 @@ class BackupService(
         }
     }
 
-    private fun buildRawZip(targetZipFile: File, dbFile: File): String {
-        ZipOutputStream(FileOutputStream(targetZipFile)).use { zip ->
-            // 1. 备份数据库
+    private fun writeZipToStream(output: OutputStream, dbFile: File) {
+        ZipOutputStream(output).use { zip ->
             addFileToZip(zip, dbFile, "database.sqlite")
             val walFile = File(dbFile.parentFile, "${dbFile.name}-wal")
             val shmFile = File(dbFile.parentFile, "${dbFile.name}-shm")
             if (walFile.exists()) addFileToZip(zip, walFile, "database.sqlite-wal")
             if (shmFile.exists()) addFileToZip(zip, shmFile, "database.sqlite-shm")
 
-            // 2. 备份图片
             val imageDir = context.getExternalFilesDir("Pictures")
             if (imageDir != null && imageDir.exists()) {
                 imageDir.listFiles()?.forEach { file ->
@@ -164,7 +167,6 @@ class BackupService(
                 }
             }
 
-            // 3. 备份 SharedPreferences（API Key、设置等）
             val prefsDir = File(context.dataDir.absolutePath, "shared_prefs")
             if (prefsDir.exists()) {
                 prefsDir.listFiles()?.forEach { file ->
@@ -175,7 +177,7 @@ class BackupService(
             }
 
             val metadata = JSONObject()
-                .put("version", 2)
+                .put("version", 3)
                 .put("exportTime", System.currentTimeMillis())
                 .put("app", "construction-log")
                 .put("includesSharedPrefs", true)
@@ -184,7 +186,6 @@ class BackupService(
             zip.write(metadata.toByteArray())
             zip.closeEntry()
         }
-        return sha256Hex(targetZipFile)
     }
 
     private fun addFileToZip(zip: ZipOutputStream, file: File, entryName: String) {
@@ -199,84 +200,100 @@ class BackupService(
             throw IllegalStateException("数据库不存在")
         }
 
-        val tempZipFile = File.createTempFile("backup_export_", ".zip", context.cacheDir)
-        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val tempZip = File(context.cacheDir, "backup_${System.currentTimeMillis()}.zip.tmp")
         try {
-            val sha256 = buildRawZip(tempZipFile, dbFile)
+            tempZip.outputStream().use { fos ->
+                writeZipToStream(fos, dbFile)
+            }
+
+            val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
             writeOutput { output ->
-                writeBinaryHeader(output, iv, sha256)
-                encryptFileToOutput(tempZipFile, output, iv)
+                writeBinaryHeaderV3(output, iv)
+                encryptFileToOutput(tempZip, output, iv)
                 output.flush()
             }
         } finally {
-            tempZipFile.delete()
+            if (tempZip.exists()) tempZip.delete()
         }
     }
 
-    private fun writeBinaryHeader(output: OutputStream, iv: ByteArray, sha256: String) {
-        output.write(BACKUP_MAGIC)
+    private fun writeBinaryHeaderV3(output: OutputStream, iv: ByteArray) {
+        output.write(BACKUP_MAGIC_PREFIX)
+        output.write(byteArrayOf(BACKUP_VERSION_V3.toByte()))
         output.write(iv)
-        output.write(sha256.toByteArray(Charsets.US_ASCII))
     }
 
-    private fun encryptFileToOutput(sourceFile: File, output: OutputStream, iv: ByteArray) {
+    private fun encryptFileToOutput(file: File, output: OutputStream, iv: ByteArray) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, exportSecretKey(), GCMParameterSpec(128, iv))
-        CipherOutputStream(output, cipher).use { cipherOutput ->
-            FileInputStream(sourceFile).use { input ->
-                input.copyTo(cipherOutput)
+        
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(8192)
+            var read: Int
+            while (input.read(buffer).also { read = it } != -1) {
+                val encrypted = cipher.update(buffer, 0, read)
+                if (encrypted != null) output.write(encrypted)
             }
+            val final = cipher.doFinal()
+            if (final != null) output.write(final)
         }
     }
 
     private fun isBinaryBackup(input: BufferedInputStream): Boolean {
-        input.mark(BACKUP_MAGIC.size)
-        val header = ByteArray(BACKUP_MAGIC.size)
+        input.mark(BACKUP_MAGIC_PREFIX.size + 1)
+        val header = ByteArray(BACKUP_MAGIC_PREFIX.size + 1)
         val read = input.read(header)
         input.reset()
-        return read == BACKUP_MAGIC.size && header.contentEquals(BACKUP_MAGIC)
+        if (read != header.size) return false
+        val prefix = header.copyOfRange(0, BACKUP_MAGIC_PREFIX.size)
+        return prefix.contentEquals(BACKUP_MAGIC_PREFIX)
     }
 
     private fun importBinaryBackup(input: BufferedInputStream, targetZipFile: File) {
         val dataInput = DataInputStream(input)
-        val magic = ByteArray(BACKUP_MAGIC.size)
-        dataInput.readFully(magic)
-        if (!magic.contentEquals(BACKUP_MAGIC)) {
+        val prefix = ByteArray(BACKUP_MAGIC_PREFIX.size)
+        dataInput.readFully(prefix)
+        if (!prefix.contentEquals(BACKUP_MAGIC_PREFIX)) {
             throw IllegalStateException("备份格式不兼容")
         }
+        val version = dataInput.readUnsignedByte()
 
         val iv = ByteArray(12)
         dataInput.readFully(iv)
-        val shaBytes = ByteArray(SHA256_HEX_LENGTH)
-        dataInput.readFully(shaBytes)
-        val expectedSha = String(shaBytes, Charsets.US_ASCII)
-
-        val encryptedPayload = dataInput.readBytes()
-        targetZipFile.outputStream().use { output ->
-            output.write(decryptWithFallback(encryptedPayload, iv))
+        if (version == BACKUP_VERSION_V2) {
+            val shaBytes = ByteArray(SHA256_HEX_LENGTH)
+            dataInput.readFully(shaBytes)
         }
-        val actualSha = sha256Hex(targetZipFile)
-        if (!actualSha.equals(expectedSha, ignoreCase = true)) {
-            throw IllegalStateException("备份完整性校验失败")
+
+        val encryptedTemp = File(targetZipFile.parentFile ?: context.cacheDir, "backup_payload_${System.currentTimeMillis()}.enc")
+        try {
+            encryptedTemp.outputStream().use { output ->
+                dataInput.copyTo(output)
+            }
+
+            var lastError: Throwable? = null
+            candidateSecretKeys().forEach { secretKey ->
+                runCatching {
+                    decryptFileToFile(encryptedTemp, targetZipFile, iv, secretKey)
+                }.onSuccess {
+                    return
+                }.onFailure { error ->
+                    lastError = error
+                    if (targetZipFile.exists()) targetZipFile.delete()
+                }
+            }
+            throw IllegalStateException("备份解密失败，当前应用与备份使用的标识不兼容", lastError)
+        } finally {
+            if (encryptedTemp.exists()) encryptedTemp.delete()
         }
     }
 
     private fun importLegacyBackup(input: InputStream, targetZipFile: File) {
         val payloadText = input.bufferedReader().readText()
         val payload = JSONObject(payloadText)
-        val version = payload.optInt("version", -1)
-        // 支持 version 1 和 version 2
-        if (version != 1 && version != 2) throw IllegalStateException("备份版本不兼容")
-
         val iv = Base64.decode(payload.getString("iv"), Base64.NO_WRAP)
         val encrypted = Base64.decode(payload.getString("data"), Base64.NO_WRAP)
-        val expectedSha = payload.getString("sha256")
-
         targetZipFile.outputStream().use { it.write(decryptWithFallback(encrypted, iv)) }
-        val actualSha = sha256Hex(targetZipFile)
-        if (!actualSha.equals(expectedSha, ignoreCase = true)) {
-            throw IllegalStateException("备份完整性校验失败")
-        }
     }
 
     private fun unzipToDirectory(zipFile: File, targetDir: File) {
@@ -320,11 +337,29 @@ class BackupService(
                 return decrypt(data, iv, secretKey)
             } catch (error: AEADBadTagException) {
                 lastError = error
-            } catch (error: IllegalStateException) {
+            } catch (error: Exception) {
                 lastError = error
             }
         }
-        throw IllegalStateException("备份解密失败，当前应用与备份使用的标识不兼容", lastError)
+        throw IllegalStateException("备份解密失败", lastError)
+    }
+
+    private fun decryptFileToFile(sourceFile: File, targetFile: File, iv: ByteArray, secretKey: SecretKeySpec) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+        
+        FileInputStream(sourceFile).use { input ->
+            FileOutputStream(targetFile).use { output ->
+                val buffer = ByteArray(8192)
+                var read: Int
+                while (input.read(buffer).also { read = it } != -1) {
+                    val decrypted = cipher.update(buffer, 0, read)
+                    if (decrypted != null) output.write(decrypted)
+                }
+                val final = cipher.doFinal()
+                if (final != null) output.write(final)
+            }
+        }
     }
 
     private fun exportSecretKey(): SecretKeySpec = secretKeyForSeed(STABLE_BACKUP_KEY_SEED)
@@ -340,26 +375,11 @@ class BackupService(
         return SecretKeySpec(hash.copyOfRange(0, 16), "AES")
     }
 
-    private fun sha256Hex(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        FileInputStream(file).use { input ->
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            while (true) {
-                val read = input.read(buffer)
-                if (read == -1) break
-                digest.update(buffer, 0, read)
-            }
-        }
-        return digest.digest().toHexString()
-    }
-
-    private fun ByteArray.toHexString(): String {
-        return joinToString("") { "%02x".format(it) }
-    }
-
     companion object {
         private const val DB_NAME = "construction_logs_secure.db"
-        private val BACKUP_MAGIC = byteArrayOf('C'.code.toByte(), 'L'.code.toByte(), 'B'.code.toByte(), 'K'.code.toByte(), 2)
+        private val BACKUP_MAGIC_PREFIX = byteArrayOf('C'.code.toByte(), 'L'.code.toByte(), 'B'.code.toByte(), 'K'.code.toByte())
+        private const val BACKUP_VERSION_V2 = 2
+        private const val BACKUP_VERSION_V3 = 3
         private const val SHA256_HEX_LENGTH = 64
         private const val AUTO_BACKUP_FILE_NAME = "construction-log-auto-backup.zip"
         private const val LEGACY_PACKAGE_NAME = "com.example.constructionlog"

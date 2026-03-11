@@ -74,6 +74,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import coil.imageLoader
 
 class MainActivity : FragmentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -184,6 +185,7 @@ class MainActivity : FragmentActivity() {
                 contract = ActivityResultContracts.CreateDocument("application/zip")
             ) { uri ->
                 if (uri != null) {
+                    prepareForBackup()
                     runOnIo(
                         action = { backupService.exportBackup(uri).getOrThrow() },
                         onSuccess = { toast("备份导出成功") },
@@ -309,18 +311,19 @@ class MainActivity : FragmentActivity() {
                             onRemarkChange = viewModel::updateRemark,
                             onRemoveImage = viewModel::removeImage,
                             onSave = { 
+                                prepareForBackup()
                                 viewModel.save {
                                     runOnIo(
                                         action = {
                                             val picturesDir = context.getExternalFilesDir("Pictures") ?: context.filesDir
                                             app.repository.cleanupOrphanedImages(picturesDir)
-                                            if (autoBackupEnabled) {
-                                                backupService.exportAutoBackup().getOrThrow()
-                                            }
                                         },
                                         onSuccess = {},
-                                        onError = { toast("自动备份失败: ${it.message}") }
+                                        onError = { toast("清理图片失败: ${it.message}") }
                                     )
+                                    if (autoBackupEnabled) {
+                                        AutoBackupScheduler.requestImmediate(context)
+                                    }
                                 } 
                             },
                             authEnabled = authEnabled,
@@ -598,6 +601,14 @@ class MainActivity : FragmentActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun prepareForBackup() {
+        runCatching {
+            val loader = applicationContext.imageLoader
+            loader.memoryCache?.clear()
+        }
+        System.gc()
     }
 
     private fun clearImageFiles() {

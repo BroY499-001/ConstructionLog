@@ -134,7 +134,11 @@ fun AppNavigation(
                 onStageChange = onStageChange,
                 onRemarkChange = onRemarkChange,
                 onRemoveImage = onRemoveImage,
-                onSave = onSave,
+                onSave = {
+                    onSave()
+                    onShowList()
+                    navController.popBackStack(Routes.Home, false)
+                },
                 onAddFromCamera = onAddFromCamera,
                 onAddFromGallery = onAddFromGallery,
                 onAutoFetchWeather = onAutoFetchWeather,
