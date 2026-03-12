@@ -49,11 +49,17 @@ data class ConstructionLogEntity(
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index(value = ["projectId"]), Index(value = ["done"]), Index(value = ["dueAt"])]
+    indices = [
+        Index(value = ["projectId"]),
+        Index(value = ["done"]),
+        Index(value = ["dueAt"]),
+        Index(value = ["acceptanceFormId"])
+    ]
 )
 data class PlanTaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val projectId: Long,
+    val acceptanceFormId: Long? = null,
     val title: String,
     val detail: String = "",
     val dueAt: Long? = null,

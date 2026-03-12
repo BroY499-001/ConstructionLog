@@ -371,6 +371,14 @@ class MainActivity : FragmentActivity() {
                             onStartEdit = viewModel::startEdit,
                             onStartCreateAcceptance = { viewModel.startCreateAcceptance() },
                             onStartEditAcceptance = viewModel::startEditAcceptance,
+                            onStartEditAcceptanceById = { id, onReady ->
+                                viewModel.startEditAcceptanceById(id) { ok ->
+                                    if (!ok) {
+                                        toast("验收记录不存在")
+                                    }
+                                    onReady(ok)
+                                }
+                            },
                             onSelectProject = viewModel::selectProject,
                             onDelete = viewModel::moveToTrash,
                             onRestore = viewModel::restore,

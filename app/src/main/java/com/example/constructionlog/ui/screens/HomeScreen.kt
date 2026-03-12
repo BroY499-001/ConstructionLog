@@ -63,6 +63,7 @@ fun HomeScreen(
     onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
     onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
     onDeletePlanTask: (Long) -> Unit,
+    onOpenAcceptanceFromPlan: (Long) -> Unit,
     onOpenAcceptance: () -> Unit,
     onOpenTrash: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -170,6 +171,7 @@ fun HomeScreen(
                         onUpdatePlanTask = onUpdatePlanTask,
                         onTogglePlanTask = onTogglePlanTask,
                         onDeletePlanTask = onDeletePlanTask,
+                        onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
                         modifier = Modifier.padding(padding)
                     )
                 } else {
@@ -182,6 +184,7 @@ fun HomeScreen(
                         onUpdatePlanTask = onUpdatePlanTask,
                         onTogglePlanTask = onTogglePlanTask,
                         onDeletePlanTask = onDeletePlanTask,
+                        onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
                         modifier = Modifier.padding(padding)
                     )
                 }

@@ -21,7 +21,7 @@ import net.sqlcipher.database.SupportFactory
         AcceptanceMaterialEntity::class,
         AcceptanceImageEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -40,6 +40,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
                 .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_5_6)
                 .build()
         }
 
@@ -189,6 +190,13 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE acceptance_item ADD COLUMN imageUris TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE plan_task ADD COLUMN acceptanceFormId INTEGER")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_plan_task_acceptanceFormId` ON `plan_task` (`acceptanceFormId`)")
             }
         }
     }

@@ -89,6 +89,7 @@ fun CalendarHome(
     onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
     onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
     onDeletePlanTask: (Long) -> Unit,
+    onOpenAcceptanceFromPlan: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
@@ -269,6 +270,7 @@ fun CalendarHome(
                 onUpdatePlanTask = onUpdatePlanTask,
                 onTogglePlanTask = onTogglePlanTask,
                 onDeletePlanTask = onDeletePlanTask,
+                onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
                 showHeaderAction = true
             )
         }
@@ -461,6 +463,7 @@ private fun PlanTasksCard(
     onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
     onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
     onDeletePlanTask: (Long) -> Unit,
+    onOpenAcceptanceFromPlan: (Long) -> Unit,
     showHeaderAction: Boolean
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -490,12 +493,24 @@ private fun PlanTasksCard(
                 )
             } else {
                 planTasks.take(6).forEach { task ->
+                    val linkedAcceptanceId = task.acceptanceFormId
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .let { base ->
+                                    if (linkedAcceptanceId != null) {
+                                        base.clickable { onOpenAcceptanceFromPlan(linkedAcceptanceId) }
+                                    } else {
+                                        base
+                                    }
+                                },
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             Text(
                                 text = if (task.done) "✓ ${task.title}" else task.title,
                                 style = MaterialTheme.typography.bodyLarge,
@@ -505,12 +520,16 @@ private fun PlanTasksCard(
                                 text = buildString {
                                     append("优先级${task.priority}")
                                     task.dueAt?.let { append(" · 截止 ${formatDate(it)}") }
+                                    if (linkedAcceptanceId != null) append(" · 关联验收")
                                 },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Row {
+                            if (linkedAcceptanceId != null) {
+                                TextButton(onClick = { onOpenAcceptanceFromPlan(linkedAcceptanceId) }) { Text("查看验收") }
+                            }
                             TextButton(onClick = { onTogglePlanTask(task.id, !task.done) }) {
                                 Text(if (task.done) "重开" else "完成")
                             }
@@ -562,6 +581,7 @@ fun ReminderListPage(
     onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
     onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
     onDeletePlanTask: (Long) -> Unit,
+    onOpenAcceptanceFromPlan: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -576,6 +596,7 @@ fun ReminderListPage(
                 onUpdatePlanTask = onUpdatePlanTask,
                 onTogglePlanTask = onTogglePlanTask,
                 onDeletePlanTask = onDeletePlanTask,
+                onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
                 showHeaderAction = true
             )
         }

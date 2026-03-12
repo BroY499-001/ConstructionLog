@@ -44,6 +44,7 @@ fun AppNavigation(
     onStartEdit: (LogWithImages) -> Unit,
     onStartCreateAcceptance: () -> Unit,
     onStartEditAcceptance: (com.constructionlog.app.data.AcceptanceFormWithDetails) -> Unit,
+    onStartEditAcceptanceById: (Long, (Boolean) -> Unit) -> Unit,
     onSelectProject: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onRestore: (Long) -> Unit,
@@ -138,6 +139,13 @@ fun AppNavigation(
                 onUpdatePlanTask = onUpdatePlanTask,
                 onTogglePlanTask = onTogglePlanTask,
                 onDeletePlanTask = onDeletePlanTask,
+                onOpenAcceptanceFromPlan = { formId ->
+                    onStartEditAcceptanceById(formId) { ok ->
+                        if (ok) {
+                            navController.navigate(Routes.AcceptanceEditor)
+                        }
+                    }
+                },
                 onOpenAcceptance = { navController.navigate(Routes.AcceptanceHome) },
                 onOpenTrash = {
                     onShowTrash()
@@ -246,6 +254,13 @@ fun AppNavigation(
                 onUpdatePlanTask = onUpdatePlanTask,
                 onTogglePlanTask = onTogglePlanTask,
                 onDeletePlanTask = onDeletePlanTask,
+                onOpenAcceptanceFromPlan = { formId ->
+                    onStartEditAcceptanceById(formId) { ok ->
+                        if (ok) {
+                            navController.navigate(Routes.AcceptanceEditor)
+                        }
+                    }
+                },
                 onBack = {
                     onShowList()
                     navController.popBackStack(Routes.Home, false)

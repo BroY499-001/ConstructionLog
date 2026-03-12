@@ -130,7 +130,7 @@ class LogRepository(
         items: List<AcceptanceItemEntity>,
         materials: List<AcceptanceMaterialEntity>,
         imageUris: List<String>
-    ) {
+    ): Long {
         val now = System.currentTimeMillis()
         val formId = if (existingId == null) {
             dao.insertAcceptanceForm(
@@ -185,10 +185,17 @@ class LogRepository(
                 AcceptanceImageEntity(formId = formId, imageUri = uri, createdAt = now)
             })
         }
+
+        return formId
     }
 
     suspend fun deleteAcceptanceForm(id: Long) {
+        dao.deletePlanTaskByAcceptanceFormId(id)
         dao.deleteAcceptanceForm(id)
+    }
+
+    suspend fun getAcceptanceFormById(id: Long): AcceptanceFormWithDetails? {
+        return dao.getAcceptanceFormById(id)
     }
 
     suspend fun moveToTrash(id: Long) {
@@ -219,13 +226,21 @@ class LogRepository(
         dao.clearAllProjects()
     }
 
-    suspend fun addPlanTask(projectId: Long, title: String, detail: String, dueAt: Long?, priority: Int) {
+    suspend fun addPlanTask(
+        projectId: Long,
+        title: String,
+        detail: String,
+        dueAt: Long?,
+        priority: Int,
+        acceptanceFormId: Long? = null
+    ) {
         val cleanTitle = title.trim()
         require(cleanTitle.isNotBlank()) { "计划标题不能为空" }
         val now = System.currentTimeMillis()
         dao.insertPlanTask(
             PlanTaskEntity(
                 projectId = projectId,
+                acceptanceFormId = acceptanceFormId,
                 title = cleanTitle,
                 detail = detail.trim(),
                 dueAt = dueAt,
@@ -243,6 +258,14 @@ class LogRepository(
 
     suspend fun deletePlanTask(id: Long) {
         dao.deletePlanTask(id)
+    }
+
+    suspend fun getPlanTaskByAcceptanceFormId(acceptanceFormId: Long): PlanTaskEntity? {
+        return dao.getPlanTaskByAcceptanceFormId(acceptanceFormId)
+    }
+
+    suspend fun deletePlanTaskByAcceptanceFormId(acceptanceFormId: Long) {
+        dao.deletePlanTaskByAcceptanceFormId(acceptanceFormId)
     }
 
     suspend fun updatePlanTask(id: Long, title: String, detail: String, dueAt: Long?, priority: Int) {

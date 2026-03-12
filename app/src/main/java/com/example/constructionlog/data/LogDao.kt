@@ -139,6 +139,9 @@ interface LogDao {
     @Query("SELECT * FROM plan_task WHERE id = :id LIMIT 1")
     suspend fun getPlanTaskById(id: Long): PlanTaskEntity?
 
+    @Query("SELECT * FROM plan_task WHERE acceptanceFormId = :acceptanceFormId LIMIT 1")
+    suspend fun getPlanTaskByAcceptanceFormId(acceptanceFormId: Long): PlanTaskEntity?
+
     @Update
     suspend fun updatePlanTask(task: PlanTaskEntity)
 
@@ -147,6 +150,9 @@ interface LogDao {
 
     @Query("DELETE FROM plan_task WHERE id = :id")
     suspend fun deletePlanTask(id: Long)
+
+    @Query("DELETE FROM plan_task WHERE acceptanceFormId = :acceptanceFormId")
+    suspend fun deletePlanTaskByAcceptanceFormId(acceptanceFormId: Long)
 
     @Query("SELECT * FROM quality_issue WHERE projectId = :projectId ORDER BY CASE status WHEN 'OPEN' THEN 0 WHEN 'IN_PROGRESS' THEN 1 ELSE 2 END ASC, severity DESC, updatedAt DESC")
     fun observeQualityIssues(projectId: Long): Flow<List<QualityIssueEntity>>

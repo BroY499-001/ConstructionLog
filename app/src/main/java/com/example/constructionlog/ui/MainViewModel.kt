@@ -254,6 +254,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun startEditAcceptanceById(id: Long, onReady: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val item = repository.getAcceptanceFormById(id)
+            if (item == null) {
+                onReady(false)
+                return@launch
+            }
+            startEditAcceptance(item)
+            onReady(true)
+        }
+    }
+
     fun updateDate(timeMillis: Long) {
         _editorState.update { it.copy(date = timeMillis) }
     }
@@ -429,7 +441,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!state.isValid() || state.projectId <= 0L) return
 
         viewModelScope.launch {
-            repository.saveAcceptanceForm(
+            val formId = repository.saveAcceptanceForm(
                 existingId = state.editingId,
                 projectId = state.projectId,
                 type = state.type,
@@ -469,6 +481,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     },
                 imageUris = state.imageUris
             )
+            val now = System.currentTimeMillis()
+            val isFuture = state.date > now
+            val linkedTask = repository.getPlanTaskByAcceptanceFormId(formId)
+            if (isFuture) {
+                val title = "验收：${state.stage}"
+                val detail = buildString {
+                    if (state.location.isNotBlank()) {
+                        append("地点：").append(state.location)
+                    }
+                }
+                if (linkedTask == null) {
+                    repository.addPlanTask(
+                        projectId = state.projectId,
+                        title = title,
+                        detail = detail,
+                        dueAt = state.date,
+                        priority = 2,
+                        acceptanceFormId = formId
+                    )
+                } else {
+                    repository.updatePlanTask(
+                        id = linkedTask.id,
+                        title = title,
+                        detail = detail,
+                        dueAt = state.date,
+                        priority = linkedTask.priority
+                    )
+                }
+            } else if (linkedTask != null) {
+                repository.deletePlanTask(linkedTask.id)
+            }
             onDone()
         }
     }
