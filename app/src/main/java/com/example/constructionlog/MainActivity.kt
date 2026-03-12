@@ -95,6 +95,8 @@ class MainActivity : FragmentActivity() {
             val logs by viewModel.logs.collectAsStateWithLifecycle()
             val trash by viewModel.trash.collectAsStateWithLifecycle()
             val editor by viewModel.editorState.collectAsStateWithLifecycle()
+            val acceptanceForms by viewModel.acceptanceForms.collectAsStateWithLifecycle()
+            val acceptanceEditor by viewModel.acceptanceEditorState.collectAsStateWithLifecycle()
             val projects by viewModel.projects.collectAsStateWithLifecycle()
             val projectsLoaded by viewModel.projectsLoaded.collectAsStateWithLifecycle()
             val planTasks by viewModel.planTasks.collectAsStateWithLifecycle()
@@ -108,6 +110,9 @@ class MainActivity : FragmentActivity() {
             var reauthSeconds by remember { mutableStateOf(appSettings.getReauthSeconds()) }
             var autoBackupEnabled by remember { mutableStateOf(appSettings.isAutoBackupEnabled()) }
             var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+            var pendingAcceptanceCameraUri by remember { mutableStateOf<Uri?>(null) }
+            var pendingAcceptanceItemIndex by remember { mutableStateOf<Int?>(null) }
+            var pendingAcceptanceItemCameraUri by remember { mutableStateOf<Uri?>(null) }
             var pendingPdfDateMillis by remember { mutableStateOf<Long?>(null) }
             var pendingWeatherDateMillis by remember { mutableStateOf<Long?>(null) }
             var pendingSystemReminder by remember { mutableStateOf<Triple<String, String, Long>?>(null) }
@@ -138,6 +143,52 @@ class MainActivity : FragmentActivity() {
                     )
                 }
             }
+            val pickAcceptanceImagesLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 30)
+            ) { uris ->
+                if (uris.isNotEmpty()) {
+                    uris.forEach { uri ->
+                        runCatching {
+                            contentResolver.takePersistableUriPermission(
+                                uri,
+                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+                    }
+                    runOnIo(
+                        action = {
+                            val localUris = persistImagesLocally(uris)
+                            withContext(Dispatchers.Main) { viewModel.addAcceptanceImages(localUris) }
+                        },
+                        onSuccess = {},
+                        onError = { toast("瀵煎叆鍥剧墖澶辫触: ${it.message}") }
+                    )
+                }
+            }
+            val pickAcceptanceItemImagesLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 30)
+            ) { uris ->
+                val targetIndex = pendingAcceptanceItemIndex
+                if (uris.isNotEmpty() && targetIndex != null) {
+                    uris.forEach { uri ->
+                        runCatching {
+                            contentResolver.takePersistableUriPermission(
+                                uri,
+                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+                    }
+                    runOnIo(
+                        action = {
+                            val localUris = persistImagesLocally(uris)
+                            withContext(Dispatchers.Main) { viewModel.addAcceptanceItemImages(targetIndex, localUris) }
+                        },
+                        onSuccess = {},
+                        onError = { toast("瀵煎叆鍥剧墖澶辫触: ${it.message}") }
+                    )
+                }
+                pendingAcceptanceItemIndex = null
+            }
             val cameraLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.TakePicture()
             ) { success ->
@@ -153,6 +204,45 @@ class MainActivity : FragmentActivity() {
                         )
                     }
                 }
+            }
+            val acceptanceCameraLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.TakePicture()
+            ) { success ->
+                if (success) {
+                    pendingAcceptanceCameraUri?.let { cameraUri ->
+                        runOnIo(
+                            action = {
+                                val local = persistImageToLocal(cameraUri)
+                                withContext(Dispatchers.Main) { viewModel.addAcceptanceImages(listOf(local)) }
+                            },
+                            onSuccess = {},
+                            onError = { toast("淇濆瓨鐓х墖澶辫触: ${it.message}") }
+                        )
+                    }
+                }
+            }
+            val acceptanceItemCameraLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.TakePicture()
+            ) { success ->
+                if (success) {
+                    val targetIndex = pendingAcceptanceItemIndex
+                    pendingAcceptanceItemCameraUri?.let { cameraUri ->
+                        if (targetIndex != null) {
+                            runOnIo(
+                                action = {
+                                    val local = persistImageToLocal(cameraUri)
+                                    withContext(Dispatchers.Main) {
+                                        viewModel.addAcceptanceItemImages(targetIndex, listOf(local))
+                                    }
+                                },
+                                onSuccess = {},
+                                onError = { toast("淇濆瓨鐓х墖澶辫触: ${it.message}") }
+                            )
+                        }
+                    }
+                }
+                pendingAcceptanceItemIndex = null
+                pendingAcceptanceItemCameraUri = null
             }
             val locationPermissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestPermission()
@@ -269,6 +359,8 @@ class MainActivity : FragmentActivity() {
                             logs = logs,
                             trash = trash,
                             editorState = editor,
+                            acceptanceForms = acceptanceForms,
+                            acceptanceEditorState = acceptanceEditor,
                             projects = projects,
                             planTasks = planTasks,
                             projectsLoaded = projectsLoaded,
@@ -277,11 +369,14 @@ class MainActivity : FragmentActivity() {
                             onShowTrash = viewModel::showTrash,
                             onStartCreate = viewModel::startCreate,
                             onStartEdit = viewModel::startEdit,
+                            onStartCreateAcceptance = { viewModel.startCreateAcceptance() },
+                            onStartEditAcceptance = viewModel::startEditAcceptance,
                             onSelectProject = viewModel::selectProject,
                             onDelete = viewModel::moveToTrash,
                             onRestore = viewModel::restore,
                             onDeleteForever = viewModel::deleteForever,
                             onEditorProjectChange = viewModel::updateProjectId,
+                            onAcceptanceProjectChange = viewModel::updateAcceptanceProjectId,
                             onAddProject = { name ->
                                 viewModel.addProject(name) { result ->
                                     result.onSuccess { toast("项目已创建") }
@@ -325,6 +420,66 @@ class MainActivity : FragmentActivity() {
                                         AutoBackupScheduler.requestImmediate(context)
                                     }
                                 } 
+                            },
+                            onAcceptanceTypeChange = viewModel::updateAcceptanceType,
+                            onAcceptanceStageChange = viewModel::updateAcceptanceStage,
+                            onAcceptanceDateChange = viewModel::updateAcceptanceDate,
+                            onAcceptanceWeatherChange = viewModel::updateAcceptanceWeather,
+                            onAcceptanceLocationChange = viewModel::updateAcceptanceLocation,
+                            onAcceptanceInspectorChange = viewModel::updateAcceptanceInspector,
+                            onAcceptanceRemarkChange = viewModel::updateAcceptanceRemark,
+                            onAcceptanceUpdateItem = viewModel::updateAcceptanceItem,
+                            onAcceptanceAddItemImageFromCamera = { index ->
+                                val dir = context.getExternalFilesDir("Pictures") ?: context.filesDir
+                                val file = File(dir, "IMG_${System.currentTimeMillis()}.jpg")
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                pendingAcceptanceItemIndex = index
+                                pendingAcceptanceItemCameraUri = uri
+                                acceptanceItemCameraLauncher.launch(uri)
+                            },
+                            onAcceptanceAddItemImageFromGallery = { index ->
+                                pendingAcceptanceItemIndex = index
+                                pickAcceptanceItemImagesLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            onAcceptanceAddItem = viewModel::addAcceptanceItem,
+                            onAcceptanceRemoveItem = viewModel::removeAcceptanceItem,
+                            onAcceptanceRemoveImage = viewModel::removeAcceptanceImage,
+                            onAcceptanceSave = {
+                                prepareForBackup()
+                                viewModel.saveAcceptance {
+                                    runOnIo(
+                                        action = {
+                                            val picturesDir = context.getExternalFilesDir("Pictures") ?: context.filesDir
+                                            app.repository.cleanupOrphanedImages(picturesDir)
+                                        },
+                                        onSuccess = {},
+                                        onError = { toast("娓呯悊鍥剧墖澶辫触: ${it.message}") }
+                                    )
+                                    if (autoBackupEnabled) {
+                                        AutoBackupScheduler.requestImmediate(context)
+                                    }
+                                }
+                            },
+                            onAcceptanceDelete = viewModel::deleteAcceptanceForm,
+                            onAutoFetchAcceptanceWeather = { dateMillis ->
+                                pendingWeatherDateMillis = dateMillis
+                                val fineGranted = android.content.pm.PackageManager.PERMISSION_GRANTED ==
+                                    androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                val coarseGranted = android.content.pm.PackageManager.PERMISSION_GRANTED ==
+                                    androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                                if (fineGranted || coarseGranted) {
+                                    fetchWeatherForDate(dateMillis) { weather, source ->
+                                        viewModel.updateAcceptanceWeatherAuto(weather, source)
+                                    }
+                                } else {
+                                    toast("\u672A\u6388\u4E88\u5B9A\u4F4D\u6743\u9650\uFF0C\u65E0\u6CD5\u81EA\u52A8\u83B7\u53D6\u5929\u6C14")
+                                }
                             },
                             authEnabled = authEnabled,
                             reauthSeconds = reauthSeconds,
@@ -465,6 +620,22 @@ class MainActivity : FragmentActivity() {
                             },
                             onAutoFetchWeather = { dateMillis ->
                                 tryAutoFetchWeather(dateMillis)
+                            },
+                            onAddAcceptanceFromCamera = {
+                                val dir = context.getExternalFilesDir("Pictures") ?: context.filesDir
+                                val file = File(dir, "IMG_${System.currentTimeMillis()}.jpg")
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                pendingAcceptanceCameraUri = uri
+                                acceptanceCameraLauncher.launch(uri)
+                            },
+                            onAddAcceptanceFromGallery = {
+                                pickAcceptanceImagesLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
                             }
                         )
                     }

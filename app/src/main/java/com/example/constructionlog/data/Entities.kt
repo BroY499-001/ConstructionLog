@@ -114,3 +114,103 @@ data class LogImageEntity(
     val imageUri: String,
     val createdAt: Long
 )
+
+@Entity(
+    tableName = "acceptance_form",
+    foreignKeys = [
+        ForeignKey(
+            entity = ProjectEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["projectId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["projectId"]), Index(value = ["date"]), Index(value = ["stage"])]
+)
+data class AcceptanceFormEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val projectId: Long,
+    val type: String,
+    val stage: String,
+    val date: Long,
+    val weather: String = "",
+    val location: String = "",
+    val inspector: String = "",
+    val remark: String = "",
+    val createdAt: Long,
+    val updatedAt: Long
+)
+
+@Entity(
+    tableName = "acceptance_item",
+    foreignKeys = [
+        ForeignKey(
+            entity = AcceptanceFormEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["formId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["formId"]), Index(value = ["category"])]
+)
+data class AcceptanceItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val formId: Long,
+    val orderIndex: Int,
+    val category: String,
+    val subItem: String,
+    val standard: String,
+    val basis: String,
+    val status: String = AcceptanceStatus.PENDING,
+    val note: String = "",
+    val imageUris: String = ""
+)
+
+@Entity(
+    tableName = "acceptance_material",
+    foreignKeys = [
+        ForeignKey(
+            entity = AcceptanceFormEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["formId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["formId"])]
+)
+data class AcceptanceMaterialEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val formId: Long,
+    val orderIndex: Int,
+    val name: String,
+    val brand: String,
+    val spec: String,
+    val status: String = AcceptanceStatus.PENDING,
+    val note: String = ""
+)
+
+@Entity(
+    tableName = "acceptance_image",
+    foreignKeys = [
+        ForeignKey(
+            entity = AcceptanceFormEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["formId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["formId"])]
+)
+data class AcceptanceImageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val formId: Long,
+    val imageUri: String,
+    val createdAt: Long
+)
+
+object AcceptanceStatus {
+    const val PENDING = "PENDING"
+    const val PASS = "PASS"
+    const val FAIL = "FAIL"
+    const val NA = "NA"
+}

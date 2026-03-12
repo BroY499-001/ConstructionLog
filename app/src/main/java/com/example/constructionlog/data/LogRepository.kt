@@ -17,6 +17,9 @@ class LogRepository(
 
     fun observeQualityIssues(projectId: Long): Flow<List<QualityIssueEntity>> = dao.observeQualityIssues(projectId)
 
+    fun observeAcceptanceForms(projectId: Long): Flow<List<AcceptanceFormWithDetails>> =
+        dao.observeAcceptanceForms(projectId)
+
     suspend fun addProject(name: String): Long {
         val value = name.trim()
         require(value.isNotBlank()) { "项目名称不能为空" }
@@ -114,6 +117,80 @@ class LogRepository(
         dao.insertImages(imageUris.map { uri -> LogImageEntity(logId = logId, imageUri = uri, createdAt = now) })
     }
 
+    suspend fun saveAcceptanceForm(
+        existingId: Long?,
+        projectId: Long,
+        type: String,
+        stage: String,
+        date: Long,
+        weather: String,
+        location: String,
+        inspector: String,
+        remark: String,
+        items: List<AcceptanceItemEntity>,
+        materials: List<AcceptanceMaterialEntity>,
+        imageUris: List<String>
+    ) {
+        val now = System.currentTimeMillis()
+        val formId = if (existingId == null) {
+            dao.insertAcceptanceForm(
+                AcceptanceFormEntity(
+                    projectId = projectId,
+                    type = type,
+                    stage = stage,
+                    date = date,
+                    weather = weather,
+                    location = location,
+                    inspector = inspector,
+                    remark = remark,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+        } else {
+            val current = dao.getAcceptanceFormById(existingId)?.form
+                ?: throw IllegalArgumentException("Acceptance form not found: $existingId")
+            dao.updateAcceptanceForm(
+                current.copy(
+                    projectId = projectId,
+                    type = type,
+                    stage = stage,
+                    date = date,
+                    weather = weather,
+                    location = location,
+                    inspector = inspector,
+                    remark = remark,
+                    updatedAt = now
+                )
+            )
+            existingId
+        }
+
+        dao.deleteAcceptanceItemsByFormId(formId)
+        dao.deleteAcceptanceMaterialsByFormId(formId)
+        dao.deleteAcceptanceImagesByFormId(formId)
+
+        if (items.isNotEmpty()) {
+            dao.insertAcceptanceItems(items.mapIndexed { index, item ->
+                item.copy(formId = formId, orderIndex = index)
+            })
+        }
+        if (materials.isNotEmpty()) {
+            dao.insertAcceptanceMaterials(materials.mapIndexed { index, item ->
+                item.copy(formId = formId, orderIndex = index)
+            })
+        }
+        if (imageUris.isNotEmpty()) {
+            dao.insertAcceptanceImages(imageUris.map { uri ->
+                AcceptanceImageEntity(formId = formId, imageUri = uri, createdAt = now)
+            })
+        }
+    }
+
+    suspend fun deleteAcceptanceForm(id: Long) {
+        dao.deleteAcceptanceForm(id)
+    }
+
     suspend fun moveToTrash(id: Long) {
         dao.softDeleteLog(id, System.currentTimeMillis())
     }
@@ -135,6 +212,10 @@ class LogRepository(
         dao.clearAllPlanTasks()
         dao.clearAllQualityIssues()
         dao.clearAllLogs()
+        dao.clearAllAcceptanceItems()
+        dao.clearAllAcceptanceMaterials()
+        dao.clearAllAcceptanceImages()
+        dao.clearAllAcceptanceForms()
         dao.clearAllProjects()
     }
 
@@ -224,7 +305,7 @@ class LogRepository(
         if (!picturesDir.exists() || !picturesDir.isDirectory) return
 
         // 1. 获取数据库中所有正在被引用的图片路径（去重）
-        val referencedUris = dao.getAllReferencedImageUris().toSet()
+        val referencedUris = (dao.getAllReferencedImageUris() + dao.getAllAcceptanceImageUris()).toSet()
         
         // 2. 遍历物理目录下的所有文件
         picturesDir.listFiles()?.forEach { file ->
@@ -254,6 +335,22 @@ class LogRepository(
             val migratedUri = Uri.fromFile(migratedFile).toString()
             if (migratedUri != image.imageUri) {
                 dao.updateImageUri(image.id, migratedUri)
+            }
+        }
+
+        dao.getAllAcceptanceImages().forEach { image ->
+            val uri = Uri.parse(image.imageUri)
+            if (uri.scheme != "file") return@forEach
+
+            val fileName = File(uri.path ?: return@forEach).name
+            if (fileName.isBlank()) return@forEach
+
+            val migratedFile = File(picturesDir, fileName)
+            if (!migratedFile.exists()) return@forEach
+
+            val migratedUri = Uri.fromFile(migratedFile).toString()
+            if (migratedUri != image.imageUri) {
+                dao.updateAcceptanceImageUri(image.id, migratedUri)
             }
         }
     }

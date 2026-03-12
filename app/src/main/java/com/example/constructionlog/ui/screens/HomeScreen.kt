@@ -1,4 +1,4 @@
-package com.constructionlog.app.ui.screens
+﻿package com.constructionlog.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FactCheck
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,6 +63,7 @@ fun HomeScreen(
     onUpdatePlanTask: (id: Long, title: String, detail: String, dueAt: Long?, priority: Int) -> Unit,
     onTogglePlanTask: (id: Long, done: Boolean) -> Unit,
     onDeletePlanTask: (Long) -> Unit,
+    onOpenAcceptance: () -> Unit,
     onOpenTrash: () -> Unit,
     onOpenSettings: () -> Unit,
     onImportBackup: () -> Unit
@@ -105,7 +107,7 @@ fun HomeScreen(
                     title = {
                         Column {
                             Text(
-                                text = if (showReminderPage) "提醒" else "装修日记",
+                                text = if (showReminderPage) "提醒" else "装修日志",
                                 style = MaterialTheme.typography.headlineSmall
                             )
                             if (!showReminderPage) {
@@ -146,6 +148,12 @@ fun HomeScreen(
                         if (showReminderPage) {
                             TextButton(onClick = { showReminderPage = false }) { Text("完成") }
                         } else {
+                            IconButton(onClick = onOpenAcceptance) {
+                                Icon(
+                                    imageVector = Icons.Rounded.FactCheck,
+                                    contentDescription = "验收"
+                                )
+                            }
                             IconButton(onClick = onOpenTrash) {
                                 Icon(imageVector = Icons.Rounded.Delete, contentDescription = "回收站")
                             }
@@ -212,10 +220,10 @@ fun HomeScreen(
         if (projectsLoaded && projects.isEmpty()) {
             AlertDialog(
                 onDismissRequest = {},
-                title = { Text("先创建项目") },
+                title = { Text("先创建项目？") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("当前没有项目，需先创建一个项目才能开始记录装修日记。")
+                        Text("当前没有项目，需要先创建一个项目才能开始记录装修日志。")
                         OutlinedTextField(
                             value = requiredProjectName,
                             onValueChange = { requiredProjectName = it },

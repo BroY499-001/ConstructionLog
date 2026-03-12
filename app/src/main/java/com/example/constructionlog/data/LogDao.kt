@@ -67,6 +67,50 @@ interface LogDao {
     @Query("UPDATE log_image SET imageUri = :imageUri WHERE id = :id")
     suspend fun updateImageUri(id: Long, imageUri: String)
 
+    @Transaction
+    @Query("SELECT * FROM acceptance_form WHERE projectId = :projectId ORDER BY date DESC, updatedAt DESC")
+    fun observeAcceptanceForms(projectId: Long): Flow<List<AcceptanceFormWithDetails>>
+
+    @Transaction
+    @Query("SELECT * FROM acceptance_form WHERE id = :id LIMIT 1")
+    suspend fun getAcceptanceFormById(id: Long): AcceptanceFormWithDetails?
+
+    @Insert
+    suspend fun insertAcceptanceForm(form: AcceptanceFormEntity): Long
+
+    @Update
+    suspend fun updateAcceptanceForm(form: AcceptanceFormEntity)
+
+    @Insert
+    suspend fun insertAcceptanceItems(items: List<AcceptanceItemEntity>)
+
+    @Insert
+    suspend fun insertAcceptanceMaterials(items: List<AcceptanceMaterialEntity>)
+
+    @Insert
+    suspend fun insertAcceptanceImages(items: List<AcceptanceImageEntity>)
+
+    @Query("DELETE FROM acceptance_item WHERE formId = :formId")
+    suspend fun deleteAcceptanceItemsByFormId(formId: Long)
+
+    @Query("DELETE FROM acceptance_material WHERE formId = :formId")
+    suspend fun deleteAcceptanceMaterialsByFormId(formId: Long)
+
+    @Query("DELETE FROM acceptance_image WHERE formId = :formId")
+    suspend fun deleteAcceptanceImagesByFormId(formId: Long)
+
+    @Query("DELETE FROM acceptance_form WHERE id = :id")
+    suspend fun deleteAcceptanceForm(id: Long)
+
+    @Query("SELECT DISTINCT imageUri FROM acceptance_image")
+    suspend fun getAllAcceptanceImageUris(): List<String>
+
+    @Query("SELECT * FROM acceptance_image")
+    suspend fun getAllAcceptanceImages(): List<AcceptanceImageEntity>
+
+    @Query("UPDATE acceptance_image SET imageUri = :imageUri WHERE id = :id")
+    suspend fun updateAcceptanceImageUri(id: Long, imageUri: String)
+
     @Query("UPDATE construction_log SET deleted = 1, deletedAt = :deletedAt, updateAt = :deletedAt WHERE id = :id")
     suspend fun softDeleteLog(id: Long, deletedAt: Long)
 
@@ -127,4 +171,16 @@ interface LogDao {
 
     @Query("DELETE FROM quality_issue")
     suspend fun clearAllQualityIssues()
+
+    @Query("DELETE FROM acceptance_item")
+    suspend fun clearAllAcceptanceItems()
+
+    @Query("DELETE FROM acceptance_material")
+    suspend fun clearAllAcceptanceMaterials()
+
+    @Query("DELETE FROM acceptance_image")
+    suspend fun clearAllAcceptanceImages()
+
+    @Query("DELETE FROM acceptance_form")
+    suspend fun clearAllAcceptanceForms()
 }

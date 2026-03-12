@@ -2,6 +2,7 @@ package com.constructionlog.app.ui
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.rememberNavController
+import com.constructionlog.app.data.AcceptanceFormWithDetails
 import com.constructionlog.app.data.LogWithImages
 import com.constructionlog.app.data.PlanTaskEntity
 import com.constructionlog.app.data.ProjectEntity
@@ -13,6 +14,8 @@ fun AppScreen(
     logs: List<LogWithImages>,
     trash: List<LogWithImages>,
     editorState: EditorState,
+    acceptanceForms: List<AcceptanceFormWithDetails>,
+    acceptanceEditorState: AcceptanceEditorState,
     projects: List<ProjectEntity>,
     planTasks: List<PlanTaskEntity>,
     projectsLoaded: Boolean,
@@ -21,11 +24,14 @@ fun AppScreen(
     onShowTrash: () -> Unit,
     onStartCreate: () -> Unit,
     onStartEdit: (LogWithImages) -> Unit,
+    onStartCreateAcceptance: () -> Unit,
+    onStartEditAcceptance: (AcceptanceFormWithDetails) -> Unit,
     onSelectProject: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onRestore: (Long) -> Unit,
     onDeleteForever: (Long) -> Unit,
     onEditorProjectChange: (Long) -> Unit,
+    onAcceptanceProjectChange: (Long) -> Unit,
     onAddProject: (String) -> Unit,
     onRenameProject: (Long, String) -> Unit,
     onDeleteProject: (Long) -> Unit,
@@ -40,6 +46,22 @@ fun AppScreen(
     onRemarkChange: (String) -> Unit,
     onRemoveImage: (String) -> Unit,
     onSave: () -> Unit,
+    onAcceptanceTypeChange: (String) -> Unit,
+    onAcceptanceStageChange: (String) -> Unit,
+    onAcceptanceDateChange: (Long) -> Unit,
+    onAcceptanceWeatherChange: (String) -> Unit,
+    onAcceptanceLocationChange: (String) -> Unit,
+    onAcceptanceInspectorChange: (String) -> Unit,
+    onAcceptanceRemarkChange: (String) -> Unit,
+    onAcceptanceUpdateItem: (Int, AcceptanceItemDraft) -> Unit,
+    onAcceptanceAddItemImageFromCamera: (Int) -> Unit,
+    onAcceptanceAddItemImageFromGallery: (Int) -> Unit,
+    onAcceptanceAddItem: () -> Unit,
+    onAcceptanceRemoveItem: (Int) -> Unit,
+    onAcceptanceRemoveImage: (String) -> Unit,
+    onAcceptanceSave: () -> Unit,
+    onAcceptanceDelete: (Long) -> Unit,
+    onAutoFetchAcceptanceWeather: (Long) -> Unit,
     authEnabled: Boolean,
     reauthSeconds: Int,
     autoBackupEnabled: Boolean,
@@ -63,7 +85,9 @@ fun AppScreen(
     onDeletePlanTask: (Long) -> Unit,
     onAddFromCamera: () -> Unit,
     onAddFromGallery: () -> Unit,
-    onAutoFetchWeather: (Long) -> Unit
+    onAutoFetchWeather: (Long) -> Unit,
+    onAddAcceptanceFromCamera: () -> Unit,
+    onAddAcceptanceFromGallery: () -> Unit
 ) {
     val navController = rememberNavController()
     AppNavigation(
@@ -71,6 +95,8 @@ fun AppScreen(
         logs = logs,
         trash = trash,
         editorState = editorState,
+        acceptanceForms = acceptanceForms,
+        acceptanceEditorState = acceptanceEditorState,
         projects = projects,
         planTasks = planTasks,
         projectsLoaded = projectsLoaded,
@@ -79,11 +105,14 @@ fun AppScreen(
         onShowTrash = onShowTrash,
         onStartCreate = onStartCreate,
         onStartEdit = onStartEdit,
+        onStartCreateAcceptance = onStartCreateAcceptance,
+        onStartEditAcceptance = onStartEditAcceptance,
         onSelectProject = onSelectProject,
         onDelete = onDelete,
         onRestore = onRestore,
         onDeleteForever = onDeleteForever,
         onEditorProjectChange = onEditorProjectChange,
+        onAcceptanceProjectChange = onAcceptanceProjectChange,
         onAddProject = onAddProject,
         onRenameProject = onRenameProject,
         onDeleteProject = onDeleteProject,
@@ -98,6 +127,22 @@ fun AppScreen(
         onRemarkChange = onRemarkChange,
         onRemoveImage = onRemoveImage,
         onSave = onSave,
+        onAcceptanceTypeChange = onAcceptanceTypeChange,
+        onAcceptanceStageChange = onAcceptanceStageChange,
+        onAcceptanceDateChange = onAcceptanceDateChange,
+        onAcceptanceWeatherChange = onAcceptanceWeatherChange,
+        onAcceptanceLocationChange = onAcceptanceLocationChange,
+        onAcceptanceInspectorChange = onAcceptanceInspectorChange,
+        onAcceptanceRemarkChange = onAcceptanceRemarkChange,
+        onAcceptanceUpdateItem = onAcceptanceUpdateItem,
+        onAcceptanceAddItemImageFromCamera = onAcceptanceAddItemImageFromCamera,
+        onAcceptanceAddItemImageFromGallery = onAcceptanceAddItemImageFromGallery,
+        onAcceptanceAddItem = onAcceptanceAddItem,
+        onAcceptanceRemoveItem = onAcceptanceRemoveItem,
+        onAcceptanceRemoveImage = onAcceptanceRemoveImage,
+        onAcceptanceSave = onAcceptanceSave,
+        onAcceptanceDelete = onAcceptanceDelete,
+        onAutoFetchAcceptanceWeather = onAutoFetchAcceptanceWeather,
         authEnabled = authEnabled,
         reauthSeconds = reauthSeconds,
         autoBackupEnabled = autoBackupEnabled,
@@ -121,6 +166,8 @@ fun AppScreen(
         onDeletePlanTask = onDeletePlanTask,
         onAddFromCamera = onAddFromCamera,
         onAddFromGallery = onAddFromGallery,
-        onAutoFetchWeather = onAutoFetchWeather
+        onAutoFetchWeather = onAutoFetchWeather,
+        onAddAcceptanceFromCamera = onAddAcceptanceFromCamera,
+        onAddAcceptanceFromGallery = onAddAcceptanceFromGallery
     )
 }

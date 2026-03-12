@@ -15,9 +15,13 @@ import net.sqlcipher.database.SupportFactory
         ConstructionLogEntity::class,
         LogImageEntity::class,
         PlanTaskEntity::class,
-        QualityIssueEntity::class
+        QualityIssueEntity::class,
+        AcceptanceFormEntity::class,
+        AcceptanceItemEntity::class,
+        AcceptanceMaterialEntity::class,
+        AcceptanceImageEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +38,8 @@ abstract class AppDatabase : RoomDatabase() {
             ).openHelperFactory(factory)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_4_5)
                 .build()
         }
 
@@ -102,6 +108,87 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_quality_issue_projectId` ON `quality_issue` (`projectId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_quality_issue_status` ON `quality_issue` (`status`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_quality_issue_dueAt` ON `quality_issue` (`dueAt`)")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `acceptance_form` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `projectId` INTEGER NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `stage` TEXT NOT NULL,
+                        `date` INTEGER NOT NULL,
+                        `weather` TEXT NOT NULL,
+                        `location` TEXT NOT NULL,
+                        `inspector` TEXT NOT NULL,
+                        `remark` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`projectId`) REFERENCES `project`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_acceptance_form_projectId` ON `acceptance_form` (`projectId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_acceptance_form_date` ON `acceptance_form` (`date`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_acceptance_form_stage` ON `acceptance_form` (`stage`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `acceptance_item` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `formId` INTEGER NOT NULL,
+                        `orderIndex` INTEGER NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `subItem` TEXT NOT NULL,
+                        `standard` TEXT NOT NULL,
+                        `basis` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `note` TEXT NOT NULL,
+                        FOREIGN KEY(`formId`) REFERENCES `acceptance_form`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_acceptance_item_formId` ON `acceptance_item` (`formId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_acceptance_item_category` ON `acceptance_item` (`category`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `acceptance_material` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `formId` INTEGER NOT NULL,
+                        `orderIndex` INTEGER NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `brand` TEXT NOT NULL,
+                        `spec` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `note` TEXT NOT NULL,
+                        FOREIGN KEY(`formId`) REFERENCES `acceptance_form`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_acceptance_material_formId` ON `acceptance_material` (`formId`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `acceptance_image` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `formId` INTEGER NOT NULL,
+                        `imageUri` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`formId`) REFERENCES `acceptance_form`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_acceptance_image_formId` ON `acceptance_image` (`formId`)")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE acceptance_item ADD COLUMN imageUris TEXT NOT NULL DEFAULT ''")
             }
         }
     }

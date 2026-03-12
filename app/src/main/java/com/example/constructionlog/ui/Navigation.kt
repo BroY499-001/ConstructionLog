@@ -8,6 +8,8 @@ import com.constructionlog.app.data.LogWithImages
 import com.constructionlog.app.data.PlanTaskEntity
 import com.constructionlog.app.data.ProjectEntity
 import com.constructionlog.app.ui.screens.CalendarScreen
+import com.constructionlog.app.ui.screens.AcceptanceEditorScreen
+import com.constructionlog.app.ui.screens.AcceptanceHomeScreen
 import com.constructionlog.app.ui.screens.EditorScreen
 import com.constructionlog.app.ui.screens.HomeScreen
 import com.constructionlog.app.ui.screens.SettingsScreen
@@ -20,6 +22,8 @@ object Routes {
     const val Trash = "trash"
     const val Calendar = "calendar"
     const val Settings = "settings"
+    const val AcceptanceHome = "acceptance_home"
+    const val AcceptanceEditor = "acceptance_editor"
 }
 
 @Composable
@@ -28,6 +32,8 @@ fun AppNavigation(
     logs: List<LogWithImages>,
     trash: List<LogWithImages>,
     editorState: com.constructionlog.app.ui.EditorState,
+    acceptanceForms: List<com.constructionlog.app.data.AcceptanceFormWithDetails>,
+    acceptanceEditorState: com.constructionlog.app.ui.AcceptanceEditorState,
     projects: List<ProjectEntity>,
     planTasks: List<PlanTaskEntity>,
     projectsLoaded: Boolean,
@@ -36,11 +42,14 @@ fun AppNavigation(
     onShowTrash: () -> Unit,
     onStartCreate: () -> Unit,
     onStartEdit: (LogWithImages) -> Unit,
+    onStartCreateAcceptance: () -> Unit,
+    onStartEditAcceptance: (com.constructionlog.app.data.AcceptanceFormWithDetails) -> Unit,
     onSelectProject: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onRestore: (Long) -> Unit,
     onDeleteForever: (Long) -> Unit,
     onEditorProjectChange: (Long) -> Unit,
+    onAcceptanceProjectChange: (Long) -> Unit,
     onAddProject: (String) -> Unit,
     onRenameProject: (Long, String) -> Unit,
     onDeleteProject: (Long) -> Unit,
@@ -55,6 +64,22 @@ fun AppNavigation(
     onRemarkChange: (String) -> Unit,
     onRemoveImage: (String) -> Unit,
     onSave: () -> Unit,
+    onAcceptanceTypeChange: (String) -> Unit,
+    onAcceptanceStageChange: (String) -> Unit,
+    onAcceptanceDateChange: (Long) -> Unit,
+    onAcceptanceWeatherChange: (String) -> Unit,
+    onAcceptanceLocationChange: (String) -> Unit,
+    onAcceptanceInspectorChange: (String) -> Unit,
+    onAcceptanceRemarkChange: (String) -> Unit,
+    onAcceptanceUpdateItem: (Int, com.constructionlog.app.ui.AcceptanceItemDraft) -> Unit,
+    onAcceptanceAddItemImageFromCamera: (Int) -> Unit,
+    onAcceptanceAddItemImageFromGallery: (Int) -> Unit,
+    onAcceptanceAddItem: () -> Unit,
+    onAcceptanceRemoveItem: (Int) -> Unit,
+    onAcceptanceRemoveImage: (String) -> Unit,
+    onAcceptanceSave: () -> Unit,
+    onAcceptanceDelete: (Long) -> Unit,
+    onAutoFetchAcceptanceWeather: (Long) -> Unit,
     authEnabled: Boolean,
     reauthSeconds: Int,
     autoBackupEnabled: Boolean,
@@ -78,7 +103,9 @@ fun AppNavigation(
     onDeletePlanTask: (Long) -> Unit,
     onAddFromCamera: () -> Unit,
     onAddFromGallery: () -> Unit,
-    onAutoFetchWeather: (Long) -> Unit
+    onAutoFetchWeather: (Long) -> Unit,
+    onAddAcceptanceFromCamera: () -> Unit,
+    onAddAcceptanceFromGallery: () -> Unit
 ) {
     NavHost(
         navController = navController,
@@ -111,6 +138,7 @@ fun AppNavigation(
                 onUpdatePlanTask = onUpdatePlanTask,
                 onTogglePlanTask = onTogglePlanTask,
                 onDeletePlanTask = onDeletePlanTask,
+                onOpenAcceptance = { navController.navigate(Routes.AcceptanceHome) },
                 onOpenTrash = {
                     onShowTrash()
                     navController.navigate(Routes.Trash)
@@ -146,6 +174,52 @@ fun AppNavigation(
                     onShowList()
                     navController.popBackStack(Routes.Home, false)
                 }
+            )
+        }
+        composable(Routes.AcceptanceHome) {
+            AcceptanceHomeScreen(
+                forms = acceptanceForms,
+                projects = projects,
+                selectedProjectId = selectedProjectId,
+                onSelectProject = onSelectProject,
+                onCreateWaterElectric = {
+                    onStartCreateAcceptance()
+                    navController.navigate(Routes.AcceptanceEditor)
+                },
+                onEdit = { item ->
+                    onStartEditAcceptance(item)
+                    navController.navigate(Routes.AcceptanceEditor)
+                },
+                onDelete = { item -> onAcceptanceDelete(item.form.id) },
+                onBack = { navController.popBackStack(Routes.Home, false) }
+            )
+        }
+        composable(Routes.AcceptanceEditor) {
+            AcceptanceEditorScreen(
+                projects = projects,
+                state = acceptanceEditorState,
+                onProjectChange = onAcceptanceProjectChange,
+                onDateChange = onAcceptanceDateChange,
+                onTypeChange = onAcceptanceTypeChange,
+                onStageChange = onAcceptanceStageChange,
+                onWeatherChange = onAcceptanceWeatherChange,
+                onLocationChange = onAcceptanceLocationChange,
+                onInspectorChange = onAcceptanceInspectorChange,
+                onRemarkChange = onAcceptanceRemarkChange,
+                onUpdateItem = onAcceptanceUpdateItem,
+                onAddItemImageFromCamera = onAcceptanceAddItemImageFromCamera,
+                onAddItemImageFromGallery = onAcceptanceAddItemImageFromGallery,
+                onAddItem = onAcceptanceAddItem,
+                onRemoveItem = onAcceptanceRemoveItem,
+                onRemoveImage = onAcceptanceRemoveImage,
+                onSave = {
+                    onAcceptanceSave()
+                    navController.popBackStack(Routes.AcceptanceHome, false)
+                },
+                onAddFromCamera = onAddAcceptanceFromCamera,
+                onAddFromGallery = onAddAcceptanceFromGallery,
+                onAutoFetchWeather = onAutoFetchAcceptanceWeather,
+                onBack = { navController.popBackStack(Routes.AcceptanceHome, false) }
             )
         }
         composable(Routes.Trash) {
