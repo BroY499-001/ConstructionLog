@@ -1,19 +1,12 @@
 package com.constructionlog.app.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,7 +28,11 @@ fun TrashList(
     modifier: Modifier = Modifier
 ) {
     if (items.isEmpty()) {
-        EmptyState("回收站为空", "删除后的日志会在这里保留 30 天")
+        EmptyState(
+            icon = Icons.Rounded.DeleteSweep,
+            title = "回收站为空",
+            description = "删除后的日志会在这里保留 30 天"
+        )
         return
     }
 

@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.constructionlog.app.ConstructionLogApp
+import com.constructionlog.app.data.AppSettings
 import com.constructionlog.app.data.ConstructionLogEntity
 import com.constructionlog.app.data.LogRepository
 import com.constructionlog.app.data.LogWithImages
@@ -88,6 +89,7 @@ data class AcceptanceEditorState(
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: LogRepository = (application as ConstructionLogApp).repository
+    private val settings = AppSettings(application)
 
     val projects = repository.observeProjects().stateIn(
         scope = viewModelScope,
@@ -158,6 +160,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _acceptanceEditorState = MutableStateFlow(AcceptanceEditorState())
     val acceptanceEditorState: StateFlow<AcceptanceEditorState> = _acceptanceEditorState.asStateFlow()
 
+    private val _onboardingCompleted = MutableStateFlow(settings.hasCompletedOnboarding())
+    val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.cleanupTrash()
@@ -176,6 +181,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun completeOnboarding() {
+        settings.setOnboardingCompleted(true)
+        _onboardingCompleted.value = true
     }
 
     fun showList() {
@@ -700,7 +710,7 @@ object AcceptanceTemplates {
             category = "电气工程",
             subItem = "线径规范",
             standard = "照明回路\u22651.5mm\u00B2；插座回路\u22652.5mm\u00B2；厨卫/空调等大功率回路\u22654mm\u00B2（具体按设计图纸）。",
-            basis = "GB 50054-2011《低压配电设计规范》"
+            basis = "GB 50054-2011《低压配配电设计规范》"
         ),
         AcceptanceItemDraft(
             category = "电气工程",

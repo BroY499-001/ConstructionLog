@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.FactCheck
+import androidx.compose.material.icons.rounded.NoteAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,6 +44,7 @@ import com.constructionlog.app.ui.components.CalendarHome
 import com.constructionlog.app.ui.components.DockBar
 import com.constructionlog.app.ui.components.ProjectManagerDialog
 import com.constructionlog.app.ui.components.ReminderListPage
+import com.constructionlog.app.ui.components.EmptyState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,30 +165,42 @@ fun HomeScreen(
                 )
             }
         ) { padding ->
-            Crossfade(targetState = showReminderPage, label = "home-page") { showReminder ->
-                if (showReminder) {
-                    ReminderListPage(
-                        tasks = planTasks,
-                        onAddPlanTask = onAddPlanTask,
-                        onUpdatePlanTask = onUpdatePlanTask,
-                        onTogglePlanTask = onTogglePlanTask,
-                        onDeletePlanTask = onDeletePlanTask,
-                        onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
-                        modifier = Modifier.padding(padding)
+            if (projectsLoaded && projects.isEmpty()) {
+                Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                    EmptyState(
+                        icon = Icons.Rounded.NoteAdd,
+                        title = "欢迎使用装修日记",
+                        description = "您还没有创建任何装修项目。点击下方按钮开始您的装修记录之旅。",
+                        buttonText = "创建第一个项目",
+                        onButtonClick = { showProjectManager = true }
                     )
-                } else {
-                    CalendarHome(
-                        logs = logs,
-                        planTasks = planTasks,
-                        onEdit = onStartEdit,
-                        onDelete = onDelete,
-                        onAddPlanTask = onAddPlanTask,
-                        onUpdatePlanTask = onUpdatePlanTask,
-                        onTogglePlanTask = onTogglePlanTask,
-                        onDeletePlanTask = onDeletePlanTask,
-                        onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
-                        modifier = Modifier.padding(padding)
-                    )
+                }
+            } else {
+                Crossfade(targetState = showReminderPage, label = "home-page") { showReminder ->
+                    if (showReminder) {
+                        ReminderListPage(
+                            tasks = planTasks,
+                            onAddPlanTask = onAddPlanTask,
+                            onUpdatePlanTask = onUpdatePlanTask,
+                            onTogglePlanTask = onTogglePlanTask,
+                            onDeletePlanTask = onDeletePlanTask,
+                            onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
+                            modifier = Modifier.padding(padding)
+                        )
+                    } else {
+                        CalendarHome(
+                            logs = logs,
+                            planTasks = planTasks,
+                            onEdit = onStartEdit,
+                            onDelete = onDelete,
+                            onAddPlanTask = onAddPlanTask,
+                            onUpdatePlanTask = onUpdatePlanTask,
+                            onTogglePlanTask = onTogglePlanTask,
+                            onDeletePlanTask = onDeletePlanTask,
+                            onOpenAcceptanceFromPlan = onOpenAcceptanceFromPlan,
+                            modifier = Modifier.padding(padding)
+                        )
+                    }
                 }
             }
         }
@@ -223,10 +237,10 @@ fun HomeScreen(
         if (projectsLoaded && projects.isEmpty()) {
             AlertDialog(
                 onDismissRequest = {},
-                title = { Text("先创建项目？") },
+                title = { Text("创建项目") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("当前没有项目，需要先创建一个项目才能开始记录装修日志。")
+                        Text("需要先创建一个项目才能开始记录。")
                         OutlinedTextField(
                             value = requiredProjectName,
                             onValueChange = { requiredProjectName = it },
@@ -250,7 +264,7 @@ fun HomeScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = onImportBackup) { Text("导入旧数据") }
+                    TextButton(onClick = onImportBackup) { Text("导入备份") }
                 }
             )
         }

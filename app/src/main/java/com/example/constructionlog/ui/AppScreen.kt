@@ -88,7 +88,9 @@ fun AppScreen(
     onAddFromGallery: () -> Unit,
     onAutoFetchWeather: (Long) -> Unit,
     onAddAcceptanceFromCamera: () -> Unit,
-    onAddAcceptanceFromGallery: () -> Unit
+    onAddAcceptanceFromGallery: () -> Unit,
+    onboardingCompleted: Boolean,
+    onCompleteOnboarding: () -> Unit
 ) {
     val navController = rememberNavController()
     AppNavigation(
@@ -170,6 +172,8 @@ fun AppScreen(
         onAddFromGallery = onAddFromGallery,
         onAutoFetchWeather = onAutoFetchWeather,
         onAddAcceptanceFromCamera = onAddAcceptanceFromCamera,
-        onAddAcceptanceFromGallery = onAddAcceptanceFromGallery
+        onAddAcceptanceFromGallery = onAddAcceptanceFromGallery,
+        onboardingCompleted = onboardingCompleted,
+        onCompleteOnboarding = onCompleteOnboarding
     )
 }

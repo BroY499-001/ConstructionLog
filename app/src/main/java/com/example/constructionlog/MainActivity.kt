@@ -89,6 +89,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         authGateVisible = appSettings.isAppAuthEnabled()
+        val activity = this
 
         setContent {
             val mode by viewModel.screenMode.collectAsStateWithLifecycle()
@@ -101,6 +102,8 @@ class MainActivity : FragmentActivity() {
             val projectsLoaded by viewModel.projectsLoaded.collectAsStateWithLifecycle()
             val planTasks by viewModel.planTasks.collectAsStateWithLifecycle()
             val selectedProject by viewModel.selectedProject.collectAsStateWithLifecycle()
+            val onboardingCompleted by viewModel.onboardingCompleted.collectAsStateWithLifecycle()
+            
             val context = LocalContext.current
             val app = application as ConstructionLogApp
             val backupService = remember { BackupService(context) }
@@ -494,14 +497,28 @@ class MainActivity : FragmentActivity() {
                             autoBackupEnabled = autoBackupEnabled,
                             autoBackupSummary = "自动覆盖 ${backupService.autoBackupDisplayName()}，保存日志后立即更新，并由系统定时兜底。",
                             onAuthEnabledChange = { enabled ->
-                                appSettings.setAppAuthEnabled(enabled)
-                                authEnabled = enabled
                                 if (!enabled) {
+                                    appSettings.setAppAuthEnabled(false)
+                                    authEnabled = false
                                     authenticated = true
                                     authGateVisible = false
                                 } else {
-                                    authenticated = false
                                     authGateVisible = true
+                                    BiometricAuthenticator(activity).authenticate(
+                                        onSuccess = {
+                                            appSettings.setAppAuthEnabled(true)
+                                            authEnabled = true
+                                            authenticated = true
+                                            authGateVisible = false
+                                        },
+                                        onFailure = {
+                                            appSettings.setAppAuthEnabled(false)
+                                            authEnabled = false
+                                            authenticated = true
+                                            authGateVisible = false
+                                            toast("身份验证失败，未开启启动验证")
+                                        }
+                                    )
                                 }
                             },
                             onReauthSecondsChange = { seconds ->
@@ -644,7 +661,9 @@ class MainActivity : FragmentActivity() {
                                 pickAcceptanceImagesLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
-                            }
+                            },
+                            onboardingCompleted = onboardingCompleted,
+                            onCompleteOnboarding = viewModel::completeOnboarding
                         )
                     }
 

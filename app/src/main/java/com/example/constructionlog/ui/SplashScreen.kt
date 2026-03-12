@@ -30,7 +30,7 @@ import com.constructionlog.app.R
 import kotlinx.coroutines.delay
 
 @Composable
-fun SplashScreen(navController: NavController) {
+fun SplashScreen(navController: NavController, onboardingCompleted: Boolean) {
     val transition = rememberInfiniteTransition(label = "splash-breath")
     val scale by transition.animateFloat(
         initialValue = 0.96f,
@@ -63,7 +63,8 @@ fun SplashScreen(navController: NavController) {
 
     LaunchedEffect(Unit) {
         delay(2000)
-        navController.navigate(Routes.Home) {
+        val targetRoute = if (onboardingCompleted) Routes.Home else Routes.Onboarding
+        navController.navigate(targetRoute) {
             popUpTo(Routes.Splash) { inclusive = true }
         }
     }

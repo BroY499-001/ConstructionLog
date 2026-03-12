@@ -25,11 +25,18 @@ class AppSettings(context: Context) {
         prefs.edit().putBoolean(KEY_AUTO_BACKUP_ENABLED, enabled).apply()
     }
 
+    fun hasCompletedOnboarding(): Boolean = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+
+    fun setOnboardingCompleted(completed: Boolean) {
+        prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply()
+    }
+
     companion object {
         private const val PREF_NAME = "construction_log_settings"
         private const val KEY_APP_AUTH_ENABLED = "app_auth_enabled"
         private const val KEY_REAUTH_SECONDS = "reauth_seconds"
         private const val KEY_AUTO_BACKUP_ENABLED = "auto_backup_enabled"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 
         const val DEFAULT_REAUTH_SECONDS = 300
         val REAUTH_OPTIONS_SECONDS = listOf(30, 60, 300)
