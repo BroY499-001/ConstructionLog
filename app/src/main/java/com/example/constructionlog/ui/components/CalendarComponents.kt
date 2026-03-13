@@ -100,32 +100,34 @@ fun CalendarHome(
     var pickerYear by remember { mutableStateOf(currentMonth.year) }
     val listState = rememberLazyListState()
     var pullDelta by remember { mutableStateOf(0f) }
-    val pullExpandConnection = remember(monthExpanded) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.UserInput) return Offset.Zero
-                if (available.y > 0 && !monthExpanded) {
-                    pullDelta += available.y
-                    if (pullDelta > 72f) {
-                        monthExpanded = true
-                        pullDelta = 0f
-                    }
-                } else if (available.y < 0 && monthExpanded) {
-                    pullDelta += available.y
-                    if (pullDelta < -72f) {
-                        monthExpanded = false
-                        pullDelta = 0f
-                    }
-                } else {
+    val pullExpandConnection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            if (source != NestedScrollSource.UserInput) return Offset.Zero
+            val atTop = !listState.canScrollBackward
+            if (available.y > 0 && !monthExpanded && atTop) {
+                // 列表在顶部，下拉展开月视图
+                pullDelta += available.y
+                if (pullDelta > 72f) {
+                    monthExpanded = true
                     pullDelta = 0f
                 }
-                return Offset.Zero
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
+                return available.copy(x = 0f)
+            } else if (available.y < 0 && monthExpanded) {
+                // 上划收起月视图
+                pullDelta += available.y
+                if (pullDelta < -72f) {
+                    monthExpanded = false
+                    pullDelta = 0f
+                }
+            } else if ((available.y > 0 && !atTop) || (available.y < 0 && !monthExpanded)) {
                 pullDelta = 0f
-                return Velocity.Zero
             }
+            return Offset.Zero
+        }
+
+        override suspend fun onPreFling(available: Velocity): Velocity {
+            pullDelta = 0f
+            return Velocity.Zero
         }
     }
 
@@ -155,7 +157,7 @@ fun CalendarHome(
             .fillMaxSize()
             .nestedScroll(pullExpandConnection),
         state = listState,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 90.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -586,7 +588,7 @@ fun ReminderListPage(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 90.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {

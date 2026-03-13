@@ -148,10 +148,8 @@ fun LogCard(
                 )
 
                 if (item.images.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        maxItemsInEachRow = 3
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         item.images.take(3).forEach { image ->
                             AsyncImage(

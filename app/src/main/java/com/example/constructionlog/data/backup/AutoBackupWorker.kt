@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import coil.imageLoader
 import com.constructionlog.app.data.AppSettings
 import com.constructionlog.app.data.BackupService
 import kotlinx.coroutines.Dispatchers
@@ -19,16 +20,18 @@ class AutoBackupWorker(
             return@withContext Result.success()
         }
 
-        // 任务开始提示
+        // 释放图片缓存，降低备份时的内存压力
+        runCatching { applicationContext.imageLoader.memoryCache?.clear() }
+        System.gc()
+
         withContext(Dispatchers.Main) {
             Toast.makeText(applicationContext, "正在执行自动备份...", Toast.LENGTH_SHORT).show()
         }
 
         val result = BackupService(applicationContext).exportAutoBackup()
-        
+
         result.fold(
             onSuccess = {
-                // 任务成功提示
                 withContext(Dispatchers.Main) {
                     Toast.makeText(applicationContext, "自动备份已完成", Toast.LENGTH_SHORT).show()
                 }
