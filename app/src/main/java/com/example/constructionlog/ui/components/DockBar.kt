@@ -21,14 +21,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.EditCalendar
-import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -44,8 +38,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.constructionlog.app.R
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -102,7 +98,7 @@ fun DockBar(
                     ) {
                         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             DockIconButton(
-                                imageVector = Icons.Rounded.Folder,
+                                painter = painterResource(R.drawable.ic_project),
                                 contentDescription = "项目管理",
                                 active = dockActiveIndex == 0,
                                 onClick = onShowProjectManager
@@ -110,7 +106,7 @@ fun DockBar(
                         }
                         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             DockIconButton(
-                                imageVector = Icons.Rounded.Notifications,
+                                painter = painterResource(R.drawable.ic_calendar),
                                 contentDescription = "提醒",
                                 active = dockActiveIndex == 1,
                                 onClick = onShowReminderPage
@@ -119,7 +115,7 @@ fun DockBar(
                         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             Box {
                                 DockIconButton(
-                                    imageVector = Icons.Rounded.EditCalendar,
+                                    painter = painterResource(R.drawable.ic_logbook),
                                     contentDescription = "新增",
                                     active = dockActiveIndex == 2,
                                     onClick = onStartCreate,
@@ -151,7 +147,7 @@ fun DockBar(
                         }
                         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             DockIconButton(
-                                imageVector = Icons.Rounded.Settings,
+                                painter = painterResource(R.drawable.ic_settings),
                                 contentDescription = "设置",
                                 active = dockActiveIndex == 3,
                                 onClick = onOpenSettings
@@ -166,7 +162,7 @@ fun DockBar(
 
 @Composable
 private fun DockIconButton(
-    imageVector: ImageVector,
+    painter: Painter,
     contentDescription: String,
     active: Boolean,
     onClick: () -> Unit,
@@ -202,9 +198,10 @@ private fun DockIconButton(
     ) {
         IconButton(onClick = onClick, interactionSource = interactionSource) {
             Icon(
-                imageVector = imageVector,
+                painter = painter,
                 contentDescription = contentDescription,
-                tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
