@@ -255,7 +255,7 @@ fun AppNavigation(
                 onWeatherChange = onAcceptanceWeatherChange,
                 onLocationChange = onAcceptanceLocationChange,
                 onInspectorChange = onAcceptanceInspectorChange,
-                onRemarkChange = onRemarkChange,
+                onRemarkChange = onAcceptanceRemarkChange,
                 onUpdateItem = onAcceptanceUpdateItem,
                 onAddItemImageFromCamera = onAcceptanceAddItemImageFromCamera,
                 onAddItemImageFromGallery = onAcceptanceAddItemImageFromGallery,

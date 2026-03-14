@@ -1,5 +1,7 @@
 package com.constructionlog.app.ui.screens
 
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,15 +17,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.EditCalendar
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.HourglassEmpty
 import androidx.compose.material.icons.rounded.Image
@@ -38,7 +45,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -58,7 +64,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.constructionlog.app.data.AcceptanceStatus
 import com.constructionlog.app.data.ProjectEntity
 import com.constructionlog.app.ui.AcceptanceEditorState
@@ -109,14 +119,27 @@ fun AcceptanceEditorScreen(
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                     actionIconContentColor = MaterialTheme.colorScheme.primary
                 ),
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "\u8FD4\u56DE")
+                    }
+                },
                 title = {
                     Text(
                         text = if (state.editingId == null) "\u65B0\u5EFA\u9A8C\u6536" else "\u7F16\u8F91\u9A8C\u6536",
-                        style = MaterialTheme.typography.headlineSmall
+                        style = MaterialTheme.typography.titleMedium
                     )
                 },
                 actions = {
-                    TextButton(onClick = onBack) { Text("\u8FD4\u56DE") }
+                    Button(
+                        onClick = onSave,
+                        enabled = state.isValid(),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        modifier = Modifier.padding(end = 8.dp).height(36.dp)
+                    ) {
+                        Text("\u4FDD\u5B58")
+                    }
                 }
             )
         }
@@ -213,16 +236,6 @@ fun AcceptanceEditorScreen(
             }
 
             item {
-                Button(
-                    onClick = onSave,
-                    enabled = state.isValid(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text("\u4FDD\u5B58\u9A8C\u6536", style = MaterialTheme.typography.titleMedium)
-                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -396,6 +409,48 @@ private fun DropdownField(
 }
 
 @Composable
+private fun EditableDropdownField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    options: List<String>,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            label = { Text(label) },
+            trailingIcon = {
+                IconButton(onClick = { expanded = true }) {
+                    Icon(imageVector = Icons.Rounded.ArrowDropDown, contentDescription = null)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth(0.6f)
+        ) {
+            options.filter { it.isNotBlank() }.distinct().forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onValueChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun AcceptanceItemCard(
     item: AcceptanceItemDraft,
     index: Int,
@@ -404,12 +459,20 @@ private fun AcceptanceItemCard(
     onAddImageFromGallery: (Int) -> Unit,
     onRemove: (Int) -> Unit
 ) {
+    var imagesExpanded by remember { mutableStateOf(false) }
+    var previewImageUri by remember { mutableStateOf<String?>(null) }
+
     val statusColor = when (item.status) {
         AcceptanceStatus.PASS -> Color(0xFF4CAF50)
         AcceptanceStatus.FAIL -> Color(0xFFF44336)
         AcceptanceStatus.NA -> Color(0xFF9E9E9E)
         else -> MaterialTheme.colorScheme.outlineVariant
     }
+
+    // 提取默认选项
+    val defaultMaterials = remember { AcceptanceTemplates.waterElectricItems().map { it.materialName }.filter { it.isNotBlank() }.distinct() }
+    val defaultBrands = remember { AcceptanceTemplates.waterElectricItems().map { it.materialBrand }.filter { it.isNotBlank() }.distinct() }
+    val defaultSpecs = remember { AcceptanceTemplates.waterElectricItems().map { it.materialSpec }.filter { it.isNotBlank() }.distinct() }
 
     ElevatedCard(shape = RoundedCornerShape(18.dp)) {
         // 顶部状态色条
@@ -488,34 +551,32 @@ private fun AcceptanceItemCard(
                 singleLine = true
             )
 
-            // 材料信息
-            if (item.materialName.isNotBlank() || item.materialBrand.isNotBlank() || item.materialSpec.isNotBlank()) {
-                SectionLabel("\u6750\u6599\u4FE1\u606F")
-            }
+            // 材料信息 - 改为带下拉的输入框
+            SectionLabel("\u6750\u6599\u4FE1\u606F")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedTextField(
+                EditableDropdownField(
                     value = item.materialName,
                     onValueChange = { onUpdate(index, item.copy(materialName = it)) },
-                    label = { Text("\u6750\u6599") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+                    label = "\u6750\u6599",
+                    options = defaultMaterials,
+                    modifier = Modifier.weight(1f)
                 )
-                OutlinedTextField(
+                EditableDropdownField(
                     value = item.materialBrand,
                     onValueChange = { onUpdate(index, item.copy(materialBrand = it)) },
-                    label = { Text("\u54C1\u724C") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+                    label = "\u54C1\u724C",
+                    options = defaultBrands,
+                    modifier = Modifier.weight(1f)
                 )
-                OutlinedTextField(
+                EditableDropdownField(
                     value = item.materialSpec,
                     onValueChange = { onUpdate(index, item.copy(materialSpec = it)) },
-                    label = { Text("\u89C4\u683C") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+                    label = "\u89C4\u683C",
+                    options = defaultSpecs,
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -532,11 +593,25 @@ private fun AcceptanceItemCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "${item.imageUris.size} \u5F20",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { imagesExpanded = !imagesExpanded },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "${item.imageUris.size} \u5F20",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Icon(
+                        imageVector = if (imagesExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 FilledTonalIconButton(onClick = { onAddImageFromCamera(index) }, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Rounded.CameraAlt, contentDescription = "\u62CD\u7167", modifier = Modifier.size(18.dp))
                 }
@@ -544,12 +619,54 @@ private fun AcceptanceItemCard(
                     Icon(Icons.Rounded.Image, contentDescription = "\u76F8\u518C", modifier = Modifier.size(18.dp))
                 }
             }
+
+            AnimatedVisibility(visible = imagesExpanded && item.imageUris.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp)
+                ) {
+                    items(item.imageUris) { uri ->
+                        AsyncImage(
+                            model = Uri.parse(uri),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { previewImageUri = uri },
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = item.note,
                 onValueChange = { onUpdate(index, item.copy(note = it)) },
                 label = { Text("\u5907\u6CE8") },
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+
+    if (previewImageUri != null) {
+        Dialog(
+            onDismissRequest = { previewImageUri = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { previewImageUri = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = Uri.parse(previewImageUri),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
     }
 }

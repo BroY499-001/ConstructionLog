@@ -92,7 +92,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.2")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+    implementation("net.zetetic:sqlcipher-android:4.13.0")
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")

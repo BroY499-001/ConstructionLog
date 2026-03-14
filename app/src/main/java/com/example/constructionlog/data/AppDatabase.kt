@@ -6,8 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import net.sqlcipher.database.SQLiteDatabase
-import net.sqlcipher.database.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
     entities = [
@@ -28,9 +27,13 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun logDao(): LogDao
 
     companion object {
+        @Volatile
+        private var sqlCipherLoaded = false
+
         fun build(context: Context): AppDatabase {
-            val passphrase = SQLiteDatabase.getBytes(DB_PASSPHRASE.toCharArray())
-            val factory = SupportFactory(passphrase)
+            ensureSqlCipherLoaded()
+            val passphrase = DB_PASSPHRASE.toByteArray(Charsets.UTF_8)
+            val factory = SupportOpenHelperFactory(passphrase)
             return Room.databaseBuilder(
                 context,
                 AppDatabase::class.java,
@@ -42,6 +45,16 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_4_5)
                 .addMigrations(MIGRATION_5_6)
                 .build()
+        }
+
+        private fun ensureSqlCipherLoaded() {
+            if (sqlCipherLoaded) return
+            synchronized(this) {
+                if (!sqlCipherLoaded) {
+                    System.loadLibrary("sqlcipher")
+                    sqlCipherLoaded = true
+                }
+            }
         }
 
         private const val DB_NAME = "construction_logs_secure.db"
