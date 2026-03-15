@@ -5,12 +5,12 @@
 ## 如何贡献
 
 ### 1. Fork 本项目
-点击右上角的 [Fork](https://github.com/YOUR_USERNAME/construction-log/fork) 按钮
+点击右上角的 [Fork](https://github.com/BroY499-001/ConstructionLog/fork) 按钮
 
 ### 2. Clone 你的 Fork
 ```bash
-git clone https://github.com/YOUR_USERNAME/construction-log.git
-cd construction-log
+git clone https://github.com/BroY499-001/ConstructionLog.git
+cd ConstructionLog
 ```
 
 ### 3. 创建分支
@@ -161,8 +161,8 @@ git commit -m "chore: 升级 Gradle 到 8.5"
 
 ## 问题反馈
 
-- 报告 Bug：[GitHub Issues](https://github.com/YOUR_USERNAME/construction-log/issues)
-- 功能建议：[GitHub Discussions](https://github.com/YOUR_USERNAME/construction-log/discussions)
+- 报告 Bug：[GitHub Issues](https://github.com/BroY499-001/ConstructionLog/issues)
+- 功能建议：[GitHub Discussions](https://github.com/BroY499-001/ConstructionLog/discussions)
 
 ## 许可证
 
