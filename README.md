@@ -8,13 +8,15 @@
 
 ## 📸 应用截图 (Screenshots)
 
-| 首页 | 日志详情 |
-| --- | --- |
-| ![首页](screenshots/home.png) | ![日志详情](screenshots/log.png) |
+<p align="center">
+  <img src="screenshots/home.png" alt="首页" width="260" />
+  <img src="screenshots/log.png" alt="日志详情" width="260" />
+</p>
 
-| 计划页 | 设置页 |
-| --- | --- |
-| ![计划页](screenshots/plan.png) | ![设置页](screenshots/setting.png) |
+<p align="center">
+  <img src="screenshots/plan.png" alt="计划页" width="260" />
+  <img src="screenshots/setting.png" alt="设置页" width="260" />
+</p>
 
 ## ✨ 功能 (Features)
 
