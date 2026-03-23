@@ -1,7 +1,6 @@
 package com.constructionlog.app.data.backup
 
 import android.content.Context
-import android.widget.Toast
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import coil.imageLoader
@@ -20,21 +19,14 @@ class AutoBackupWorker(
             return@withContext Result.success()
         }
 
-        // 释放图片缓存，降低备份时的内存压力
+        // 尝试释放图片缓存，降低内存压力，但不强制 GC
         runCatching { applicationContext.imageLoader.memoryCache?.clear() }
-        System.gc()
 
-        withContext(Dispatchers.Main) {
-            Toast.makeText(applicationContext, "正在执行自动备份...", Toast.LENGTH_SHORT).show()
-        }
-
+        // 自动备份在后台静默执行，避免在冷启动或后台运行时弹出 Toast 导致冲突或干扰
         val result = BackupService(applicationContext).exportAutoBackup()
 
         result.fold(
             onSuccess = {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(applicationContext, "自动备份已完成", Toast.LENGTH_SHORT).show()
-                }
                 Result.success()
             },
             onFailure = {

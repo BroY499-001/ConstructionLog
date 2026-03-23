@@ -3,10 +3,13 @@ package com.constructionlog.app.data
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 import android.net.Uri
+import androidx.room.withTransaction
 
 class LogRepository(
-    private val dao: LogDao
+    private val database: AppDatabase
 ) {
+    private val dao: LogDao = database.logDao()
+
     fun observeProjects(): Flow<List<ProjectEntity>> = dao.observeProjects()
 
     fun observeLogs(projectId: Long): Flow<List<LogWithImages>> = dao.observeActiveLogs(projectId)
@@ -74,47 +77,51 @@ class LogRepository(
         remark: String,
         imageUris: List<String>
     ) {
-        val now = System.currentTimeMillis()
-        val logId = if (existingId == null) {
-            dao.insertLog(
-                ConstructionLogEntity(
-                    projectId = projectId,
-                    date = date,
-                    weather = weather,
-                    location = location,
-                    content = content,
-                    workers = workers,
-                    workerNames = workerNames,
-                    safety = safety,
-                    stage = stage,
-                    remark = remark,
-                    createdAt = now,
-                    updateAt = now
+        database.withTransaction {
+            val now = System.currentTimeMillis()
+            val logId = if (existingId == null) {
+                dao.insertLog(
+                    ConstructionLogEntity(
+                        projectId = projectId,
+                        date = date,
+                        weather = weather,
+                        location = location,
+                        content = content,
+                        workers = workers,
+                        workerNames = workerNames,
+                        safety = safety,
+                        stage = stage,
+                        remark = remark,
+                        createdAt = now,
+                        updateAt = now
+                    )
                 )
-            )
-        } else {
-            val current = dao.getLogById(existingId)?.log
-                ?: throw IllegalArgumentException("Log not found: $existingId")
-            dao.updateLog(
-                current.copy(
-                    projectId = projectId,
-                    date = date,
-                    weather = weather,
-                    location = location,
-                    content = content,
-                    workers = workers,
-                    workerNames = workerNames,
-                    safety = safety,
-                    stage = stage,
-                    remark = remark,
-                    updateAt = now
+            } else {
+                val current = dao.getLogById(existingId)?.log
+                    ?: throw IllegalArgumentException("Log not found: $existingId")
+                dao.updateLog(
+                    current.copy(
+                        projectId = projectId,
+                        date = date,
+                        weather = weather,
+                        location = location,
+                        content = content,
+                        workers = workers,
+                        workerNames = workerNames,
+                        safety = safety,
+                        stage = stage,
+                        remark = remark,
+                        updateAt = now
+                    )
                 )
-            )
-            existingId
-        }
+                existingId
+            }
 
-        dao.deleteImagesByLogId(logId)
-        dao.insertImages(imageUris.map { uri -> LogImageEntity(logId = logId, imageUri = uri, createdAt = now) })
+            dao.deleteImagesByLogId(logId)
+            dao.insertImages(imageUris.map { uri ->
+                LogImageEntity(logId = logId, imageUri = uri, createdAt = now)
+            })
+        }
     }
 
     suspend fun saveAcceptanceForm(
@@ -131,62 +138,64 @@ class LogRepository(
         materials: List<AcceptanceMaterialEntity>,
         imageUris: List<String>
     ): Long {
-        val now = System.currentTimeMillis()
-        val formId = if (existingId == null) {
-            dao.insertAcceptanceForm(
-                AcceptanceFormEntity(
-                    projectId = projectId,
-                    type = type,
-                    stage = stage,
-                    date = date,
-                    weather = weather,
-                    location = location,
-                    inspector = inspector,
-                    remark = remark,
-                    createdAt = now,
-                    updatedAt = now
+        return database.withTransaction {
+            val now = System.currentTimeMillis()
+            val formId = if (existingId == null) {
+                dao.insertAcceptanceForm(
+                    AcceptanceFormEntity(
+                        projectId = projectId,
+                        type = type,
+                        stage = stage,
+                        date = date,
+                        weather = weather,
+                        location = location,
+                        inspector = inspector,
+                        remark = remark,
+                        createdAt = now,
+                        updatedAt = now
+                    )
                 )
-            )
-        } else {
-            val current = dao.getAcceptanceFormById(existingId)?.form
-                ?: throw IllegalArgumentException("Acceptance form not found: $existingId")
-            dao.updateAcceptanceForm(
-                current.copy(
-                    projectId = projectId,
-                    type = type,
-                    stage = stage,
-                    date = date,
-                    weather = weather,
-                    location = location,
-                    inspector = inspector,
-                    remark = remark,
-                    updatedAt = now
+            } else {
+                val current = dao.getAcceptanceFormById(existingId)?.form
+                    ?: throw IllegalArgumentException("Acceptance form not found: $existingId")
+                dao.updateAcceptanceForm(
+                    current.copy(
+                        projectId = projectId,
+                        type = type,
+                        stage = stage,
+                        date = date,
+                        weather = weather,
+                        location = location,
+                        inspector = inspector,
+                        remark = remark,
+                        updatedAt = now
+                    )
                 )
-            )
-            existingId
-        }
+                existingId
+            }
 
-        dao.deleteAcceptanceItemsByFormId(formId)
-        dao.deleteAcceptanceMaterialsByFormId(formId)
-        dao.deleteAcceptanceImagesByFormId(formId)
+            dao.deleteAcceptanceItemsByFormId(formId)
+            dao.deleteAcceptanceMaterialsByFormId(formId)
+            dao.deleteAcceptanceImagesByFormId(formId)
 
-        if (items.isNotEmpty()) {
-            dao.insertAcceptanceItems(items.mapIndexed { index, item ->
-                item.copy(formId = formId, orderIndex = index)
-            })
-        }
-        if (materials.isNotEmpty()) {
-            dao.insertAcceptanceMaterials(materials.mapIndexed { index, item ->
-                item.copy(formId = formId, orderIndex = index)
-            })
-        }
-        if (imageUris.isNotEmpty()) {
-            dao.insertAcceptanceImages(imageUris.map { uri ->
-                AcceptanceImageEntity(formId = formId, imageUri = uri, createdAt = now)
-            })
-        }
+            if (items.isNotEmpty()) {
+                dao.insertAcceptanceItems(items.mapIndexed { index, item ->
+                    item.copy(formId = formId, orderIndex = index)
+                })
+            }
+            if (materials.isNotEmpty()) {
+                dao.insertAcceptanceMaterials(materials.mapIndexed { index, item ->
+                    item.copy(formId = formId, orderIndex = index)
+                })
+            }
+            if (imageUris.isNotEmpty()) {
+                dao.insertAcceptanceImages(imageUris.map { uri ->
+                    AcceptanceImageEntity(formId = formId, imageUri = uri, createdAt = now)
+                })
+            }
 
-        return formId
+            formId
+        }
     }
 
     suspend fun deleteAcceptanceForm(id: Long) {

@@ -99,36 +99,34 @@ class BackupService(private val context: Context) {
     private fun doExport(writeOutput: ((OutputStream) -> Unit) -> Unit) {
         val dbFile = context.getDatabasePath(DB_NAME)
         if (!dbFile.exists()) throw IllegalStateException("数据库不存在")
-        app()?.closeDatabase()
-        try {
-            val iv = ByteArray(16).also { SecureRandom().nextBytes(it) }
-            writeOutput { out ->
-                // header: CLBK + version(4) + iv(16)
-                out.write(MAGIC); out.write(byteArrayOf(VER_V4.toByte())); out.write(iv)
-                // AES/CTR 是真正的流式加密，update() 立即返回密文
-                val keys = deriveKeys(exportSeed())
-                val cipher = Cipher.getInstance("AES/CTR/NoPadding")
-                cipher.init(Cipher.ENCRYPT_MODE, keys.first, IvParameterSpec(iv))
-                val mac = Mac.getInstance("HmacSHA256")
-                mac.init(keys.second)
-                // mac 覆盖 iv + 密文
-                mac.update(iv)
-                // 流式: ZIP → cipher.update → mac.update → output
-                val zipBuf = object : OutputStream() {
-                    override fun write(b: Int) { write(byteArrayOf(b.toByte()), 0, 1) }
-                    override fun write(b: ByteArray, off: Int, len: Int) {
-                        val enc = cipher.update(b, off, len) ?: return
-                        mac.update(enc)
-                        out.write(enc)
-                    }
+        checkpointDatabaseForBackup()
+        val iv = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        writeOutput { out ->
+            // header: CLBK + version(4) + iv(16)
+            out.write(MAGIC); out.write(byteArrayOf(VER_V4.toByte())); out.write(iv)
+            // AES/CTR 是真正的流式加密，update() 立即返回密文
+            val keys = deriveKeys(exportSeed())
+            val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, keys.first, IvParameterSpec(iv))
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(keys.second)
+            // mac 覆盖 iv + 密文
+            mac.update(iv)
+            // 流式: ZIP → cipher.update → mac.update → output
+            val zipBuf = object : OutputStream() {
+                override fun write(b: Int) { write(byteArrayOf(b.toByte()), 0, 1) }
+                override fun write(b: ByteArray, off: Int, len: Int) {
+                    val enc = cipher.update(b, off, len) ?: return
+                    mac.update(enc)
+                    out.write(enc)
                 }
-                buildZip(zipBuf, dbFile)
-                val last = cipher.doFinal()
-                if (last != null && last.isNotEmpty()) { mac.update(last); out.write(last) }
-                out.write(mac.doFinal()) // 32 bytes HMAC tag
-                out.flush()
             }
-        } finally { app()?.database }
+            buildZip(zipBuf, dbFile)
+            val last = cipher.doFinal()
+            if (last != null && last.isNotEmpty()) { mac.update(last); out.write(last) }
+            out.write(mac.doFinal()) // 32 bytes HMAC tag
+            out.flush()
+        }
     }
 
     private fun buildZip(out: OutputStream, dbFile: File) {
@@ -317,6 +315,12 @@ class BackupService(private val context: Context) {
     private fun exportSeed() = STABLE_SEED
     private fun candidateSeeds() = listOf(STABLE_SEED, "${context.packageName}:construction-log-backup", "$LEG_PKG:construction-log-backup").distinct()
     private fun app() = context.applicationContext as? ConstructionLogApp
+
+    private fun checkpointDatabaseForBackup() {
+        val appDatabase = app()?.database ?: return
+        val sqliteDb = appDatabase.openHelper.writableDatabase
+        sqliteDb.query("PRAGMA wal_checkpoint(FULL)").use { }
+    }
 
     companion object {
         private const val DB_NAME = "construction_logs_secure.db"

@@ -33,6 +33,7 @@ object AutoBackupScheduler {
 
         val periodicWork = PeriodicWorkRequestBuilder<AutoBackupWorker>(24, TimeUnit.HOURS)
             .setConstraints(constraints)
+            .setInitialDelay(24, TimeUnit.HOURS)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
 

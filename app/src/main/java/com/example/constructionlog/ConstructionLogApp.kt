@@ -19,19 +19,21 @@ class ConstructionLogApp : Application() {
         }
 
     val repository: LogRepository
-        get() = LogRepository(database.logDao())
+        get() = LogRepository(database)
 
     override fun onCreate() {
         super.onCreate()
         AutoBackupScheduler.sync(this)
         CoroutineScope(Dispatchers.IO).launch {
-            val picturesDir = getExternalFilesDir("Pictures") ?: filesDir
-            repository.migrateImageUrisToDirectory(picturesDir)
+            runCatching {
+                val picturesDir = getExternalFilesDir("Pictures") ?: filesDir
+                repository.migrateImageUrisToDirectory(picturesDir)
+            }
         }
     }
 
     /**
-     * 关闭数据库（触发 WAL checkpoint），备份完成后通过 database getter 自动重建。
+     * 关闭数据库，供导入备份这类需要替换底层数据库文件的场景使用。
      */
     fun closeDatabase() {
         synchronized(dbLock) {
