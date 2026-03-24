@@ -4,6 +4,8 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.ContentValues
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
@@ -38,13 +40,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.compose.rememberNavController
 import com.constructionlog.app.data.AmapKeyStore
 import com.constructionlog.app.data.AppSettings
 import com.constructionlog.app.data.BackupService
 import com.constructionlog.app.data.PdfExportService
 import com.constructionlog.app.data.QWeatherKeyStore
+import com.constructionlog.app.data.backup.AutoBackupNotifier
 import com.constructionlog.app.data.backup.AutoBackupScheduler
 import com.constructionlog.app.security.BiometricAuthenticator
 import com.constructionlog.app.ui.AppNavigation
@@ -85,6 +88,20 @@ class MainActivity : FragmentActivity() {
     private var authenticated = false
     private var backgroundAt = 0L
     private var authGateVisible by mutableStateOf(false)
+    private var autoBackupReceiverRegistered = false
+
+    private val autoBackupReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action != AutoBackupNotifier.ACTION_RESULT) return
+            val success = intent.getBooleanExtra(AutoBackupNotifier.EXTRA_SUCCESS, true)
+            if (success) {
+                toast("自动备份已完成")
+            } else {
+                val errorMessage = intent.getStringExtra(AutoBackupNotifier.EXTRA_ERROR_MESSAGE)
+                toast(errorMessage?.let { "自动备份失败: $it" } ?: "自动备份失败")
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -682,6 +699,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
+        registerAutoBackupReceiver()
 
         if (!appSettings.isAppAuthEnabled()) {
             authenticated = true
@@ -708,6 +726,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         backgroundAt = System.currentTimeMillis()
+        unregisterAutoBackupReceiver()
         if (appSettings.isAppAuthEnabled()) {
             authGateVisible = true
         }
@@ -799,6 +818,23 @@ class MainActivity : FragmentActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun registerAutoBackupReceiver() {
+        if (autoBackupReceiverRegistered) return
+        ContextCompat.registerReceiver(
+            this,
+            autoBackupReceiver,
+            IntentFilter(AutoBackupNotifier.ACTION_RESULT),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        autoBackupReceiverRegistered = true
+    }
+
+    private fun unregisterAutoBackupReceiver() {
+        if (!autoBackupReceiverRegistered) return
+        unregisterReceiver(autoBackupReceiver)
+        autoBackupReceiverRegistered = false
     }
 
     private fun prepareForBackup() {

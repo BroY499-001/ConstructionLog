@@ -22,14 +22,15 @@ class AutoBackupWorker(
         // 尝试释放图片缓存，降低内存压力，但不强制 GC
         runCatching { applicationContext.imageLoader.memoryCache?.clear() }
 
-        // 自动备份在后台静默执行，避免在冷启动或后台运行时弹出 Toast 导致冲突或干扰
         val result = BackupService(applicationContext).exportAutoBackup()
 
         result.fold(
             onSuccess = {
+                AutoBackupNotifier.notifySuccess(applicationContext)
                 Result.success()
             },
             onFailure = {
+                AutoBackupNotifier.notifyFailure(applicationContext, it)
                 Result.retry()
             }
         )
