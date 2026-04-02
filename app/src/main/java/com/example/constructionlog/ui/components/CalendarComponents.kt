@@ -1,6 +1,7 @@
 package com.constructionlog.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -26,10 +27,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -58,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,7 +70,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
@@ -76,6 +85,11 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlin.math.max
 import kotlin.math.min
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
@@ -97,39 +111,10 @@ fun CalendarHome(
     var monthExpanded by remember { mutableStateOf(false) }
     var showMonthPicker by remember { mutableStateOf(false) }
     var pendingDeleteLog by remember { mutableStateOf<LogWithImages?>(null) }
+    var selectedStageFilter by remember { mutableStateOf<String?>(null) }
     var pickerYear by remember { mutableStateOf(currentMonth.year) }
     val listState = rememberLazyListState()
     var pullDelta by remember { mutableStateOf(0f) }
-    val pullExpandConnection = object : NestedScrollConnection {
-        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            if (source != NestedScrollSource.UserInput) return Offset.Zero
-            val atTop = !listState.canScrollBackward
-            if (available.y > 0 && !monthExpanded && atTop) {
-                // 列表在顶部，下拉展开月视图
-                pullDelta += available.y
-                if (pullDelta > 72f) {
-                    monthExpanded = true
-                    pullDelta = 0f
-                }
-                return available.copy(x = 0f)
-            } else if (available.y < 0 && monthExpanded) {
-                // 上划收起月视图
-                pullDelta += available.y
-                if (pullDelta < -72f) {
-                    monthExpanded = false
-                    pullDelta = 0f
-                }
-            } else if ((available.y > 0 && !atTop) || (available.y < 0 && !monthExpanded)) {
-                pullDelta = 0f
-            }
-            return Offset.Zero
-        }
-
-        override suspend fun onPreFling(available: Velocity): Velocity {
-            pullDelta = 0f
-            return Velocity.Zero
-        }
-    }
 
     val dateStats = remember(logs) {
         logs.groupBy {
@@ -139,9 +124,12 @@ fun CalendarHome(
         }
     }
 
-    val selectedLogs = remember(logs, selectedDate) {
+    val selectedLogs = remember(logs, selectedDate, selectedStageFilter) {
         logs.filter {
-            Instant.ofEpochMilli(it.log.date).atZone(ZoneId.systemDefault()).toLocalDate() == selectedDate
+            val logDate = Instant.ofEpochMilli(it.log.date).atZone(ZoneId.systemDefault()).toLocalDate()
+            val matchesDate = logDate == selectedDate
+            val matchesStage = selectedStageFilter == null || resolveStageName(it) == selectedStageFilter
+            matchesDate && matchesStage
         }
     }
     val monthLogs = remember(logs, currentMonth) {
@@ -153,9 +141,7 @@ fun CalendarHome(
     val stageTimeline = remember(logs) { buildStageTimeline(logs) }
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .nestedScroll(pullExpandConnection),
+        modifier = modifier.fillMaxSize(),
         state = listState,
         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 90.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -183,6 +169,22 @@ fun CalendarHome(
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surface)
                     .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
+                    .pointerInput(monthExpanded) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { _, dragAmount ->
+                                pullDelta += dragAmount
+                                if (!monthExpanded && pullDelta > 72f) {
+                                    monthExpanded = true
+                                    pullDelta = 0f
+                                } else if (monthExpanded && pullDelta < -72f) {
+                                    monthExpanded = false
+                                    pullDelta = 0f
+                                }
+                            },
+                            onDragEnd = { pullDelta = 0f },
+                            onDragCancel = { pullDelta = 0f }
+                        )
+                    }
                     .padding(16.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -262,7 +264,19 @@ fun CalendarHome(
         }
 
         item {
-            StageTimelineCard(stageTimeline = stageTimeline)
+            StageTimelineCard(
+                stageTimeline = stageTimeline,
+                selectedStage = selectedStageFilter,
+                onAnchorDateChange = { anchorDate ->
+                    if (selectedDate != anchorDate) {
+                        selectedDate = anchorDate
+                        currentMonth = YearMonth.from(anchorDate)
+                    }
+                },
+                onSelectStage = { stage ->
+                    selectedStageFilter = if (selectedStageFilter == stage) null else stage
+                }
+            )
         }
 
         item {
@@ -279,7 +293,11 @@ fun CalendarHome(
 
         item {
             Text(
-                text = "${selectedDate.format(dayFormatter)} · ${selectedLogs.size} 条日志 · ${selectedLogs.sumOf { it.images.size }} 张图片",
+                text = buildString {
+                    append(selectedDate.format(dayFormatter))
+                    selectedStageFilter?.let { append(" · $it") }
+                    append(" · ${selectedLogs.size} 条日志 · ${selectedLogs.sumOf { it.images.size }} 张图片")
+                },
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -395,21 +413,31 @@ private data class StageTimelineItem(
     val start: LocalDate,
     val end: LocalDate,
     val count: Int,
+    val durationDays: Long,
+    val latestLogDate: LocalDate,
+    val isCurrent: Boolean,
     val startRatio: Float,
     val widthRatio: Float
 )
 
+private val stageTimelineRowHeight = 58.dp
+
 @Composable
-private fun StageTimelineCard(stageTimeline: List<StageTimelineItem>) {
+private fun StageTimelineCard(
+    stageTimeline: List<StageTimelineItem>,
+    selectedStage: String?,
+    onAnchorDateChange: (LocalDate) -> Unit,
+    onSelectStage: (String) -> Unit
+) {
     ElevatedCard(shape = RoundedCornerShape(18.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("施工阶段时间线（甘特）", style = MaterialTheme.typography.titleMedium)
             if (stageTimeline.isEmpty()) {
+                Text("施工进度", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "暂无日志，无法生成时间线",
                     style = MaterialTheme.typography.bodyMedium,
@@ -417,42 +445,203 @@ private fun StageTimelineCard(stageTimeline: List<StageTimelineItem>) {
                 )
                 return@Column
             }
-            stageTimeline.forEach { item ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(item.stage, style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "${item.start.format(dayFormatter)} ~ ${item.end.format(dayFormatter)} · ${item.count} 条",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+
+            val projectStart = stageTimeline.minOf { it.start }
+            val projectEnd = stageTimeline.maxOf { it.end }
+            val totalDays = ChronoUnit.DAYS.between(projectStart, projectEnd) + 1
+            val summary = "${stageTimeline.size} 阶段 · ${totalDays} 天"
+            val currentStage = stageTimeline.maxByOrNull { it.latestLogDate }
+            val today = LocalDate.now()
+            val todayRatio = if (today in projectStart..projectEnd) {
+                (ChronoUnit.DAYS.between(projectStart, today).toFloat() / totalDays.toFloat()).coerceIn(0f, 1f)
+            } else {
+                null
+            }
+            val timelineCanvasWidth = timelineCanvasWidth(totalDays)
+            val stageListState = rememberLazyListState()
+            val rowHeightPx = with(LocalDensity.current) { stageTimelineRowHeight.roundToPx() }
+            val timelineCanvasWidthPx = with(LocalDensity.current) { timelineCanvasWidth.roundToPx() }
+            var timelineViewportWidthPx by remember { mutableStateOf(0) }
+            var anchorIndex by remember(stageTimeline) { mutableStateOf(0) }
+            var timelineOffsetPx by remember { mutableStateOf(0f) }
+            val animatedTimelineOffsetPx by animateFloatAsState(
+                targetValue = timelineOffsetPx,
+                label = "timeline-offset"
+            )
+
+            LaunchedEffect(stageTimeline) {
+                onAnchorDateChange(stageTimeline.first().anchorDate())
+            }
+
+            LaunchedEffect(stageListState, stageTimeline) {
+                snapshotFlow { stageListState.firstVisibleItemIndex to stageListState.firstVisibleItemScrollOffset }
+                    .map { (firstVisibleIndex, offset) ->
+                        val extraIndex = if (offset >= rowHeightPx / 2) 1 else 0
+                        (firstVisibleIndex + extraIndex).coerceIn(0, stageTimeline.lastIndex)
                     }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(18.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .distinctUntilChanged()
+                    .collect { centerIndex ->
+                        anchorIndex = centerIndex
+                        onAnchorDateChange(stageTimeline[centerIndex].anchorDate())
+                    }
+            }
+
+            LaunchedEffect(anchorIndex, timelineViewportWidthPx, timelineCanvasWidthPx) {
+                if (timelineViewportWidthPx <= 0) return@LaunchedEffect
+                val anchorItem = stageTimeline.getOrNull(anchorIndex) ?: return@LaunchedEffect
+                val anchorRatio = anchorItem.centerRatio()
+                val anchorX = timelineCanvasWidthPx * anchorRatio
+                timelineOffsetPx = (anchorX - timelineViewportWidthPx / 2f)
+                    .coerceIn(0f, (timelineCanvasWidthPx - timelineViewportWidthPx).coerceAtLeast(0).toFloat())
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("施工进度", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = currentStage?.let {
+                            "当前阶段：${it.stage} · 最近更新 ${it.latestLogDate.format(shortDayFormatter)}"
+                        } ?: "等待日志生成进度",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(198.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.52f))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    LazyColumn(
+                        state = stageListState,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        val startWeight = item.startRatio.coerceAtLeast(0f)
-                        if (startWeight > 0f) {
-                            Spacer(modifier = Modifier.weight(startWeight))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(item.widthRatio.coerceIn(0.05f, 1f))
-                                .fillMaxHeight()
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.82f))
-                        )
-                        val endWeight = (1f - item.startRatio - item.widthRatio).coerceAtLeast(0f)
-                        if (endWeight > 0f) {
-                            Spacer(modifier = Modifier.weight(endWeight))
+                        items(stageTimeline, key = { it.stage }) { item ->
+                            StageTimelineRow(
+                                item = item,
+                                selected = item.stage == selectedStage,
+                                canvasWidth = timelineCanvasWidth,
+                                timelineOffsetPx = animatedTimelineOffsetPx,
+                                onTimelineViewportWidthChange = { width ->
+                                    if (timelineViewportWidthPx != width) {
+                                        timelineViewportWidthPx = width
+                                    }
+                                },
+                                onClick = { onSelectStage(item.stage) }
+                            )
                         }
                     }
                 }
+            }
+
+        }
+    }
+}
+
+@Composable
+private fun StageTimelineRow(
+    item: StageTimelineItem,
+    selected: Boolean,
+    canvasWidth: androidx.compose.ui.unit.Dp,
+    timelineOffsetPx: Float,
+    onTimelineViewportWidthChange: (Int) -> Unit,
+    onClick: () -> Unit
+) {
+    val barColor = when {
+        selected -> MaterialTheme.colorScheme.primary
+        item.isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.88f)
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(stageTimelineRowHeight)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f) else Color.Transparent)
+            .padding(horizontal = 2.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.width(88.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = item.stage,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (selected || item.isCurrent) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+            Text(
+                text = "${item.durationDays}天 · ${item.count}条",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${item.start.format(shortDayFormatter)}-${item.end.format(shortDayFormatter)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (item.isCurrent) {
+                    Text(
+                        text = "进行中",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(20.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .onSizeChanged { onTimelineViewportWidthChange(it.width) }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset(x = canvasWidth * item.startRatio.coerceIn(0f, 1f))
+                        .width((canvasWidth * item.widthRatio.coerceIn(0.05f, 1f)).coerceAtLeast(18.dp))
+                        .fillMaxHeight()
+                        .graphicsLayer { translationX = -timelineOffsetPx }
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(barColor)
+                )
             }
         }
     }
@@ -668,49 +857,109 @@ private fun ReminderEditDialog(
     }
 }
 
+private val shortDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MM.dd")
+
+private fun resolveStageName(item: LogWithImages): String {
+    return item.log.stage.ifBlank { estimateStageFromContent(item.log.content) }
+}
+
+private fun computeDateRatio(date: LocalDate, start: LocalDate, end: LocalDate): Float {
+    val totalDays = (ChronoUnit.DAYS.between(start, end) + 1).coerceAtLeast(1)
+    val offset = ChronoUnit.DAYS.between(start, date).coerceIn(0, totalDays - 1)
+    return offset.toFloat() / totalDays.toFloat()
+}
+
+private fun buildTimelineTicks(projectStart: LocalDate, projectEnd: LocalDate): List<LocalDate> {
+    val totalDays = (ChronoUnit.DAYS.between(projectStart, projectEnd) + 1).coerceAtLeast(1)
+    val step = maxOf(1L, totalDays / 4)
+    return buildList {
+        add(projectStart)
+        var cursor = projectStart.plusDays(step)
+        while (cursor.isBefore(projectEnd)) {
+            add(cursor)
+            cursor = cursor.plusDays(step)
+        }
+        if (lastOrNull() != projectEnd) add(projectEnd)
+    }.distinct()
+}
+
+private fun StageTimelineItem.centerRatio(): Float {
+    return (startRatio + widthRatio / 2f).coerceIn(0f, 1f)
+}
+
+private fun StageTimelineItem.anchorDate(): LocalDate {
+    val halfDays = durationDays / 2
+    return start.plusDays(halfDays)
+}
+
+private fun timelineCanvasWidth(totalDays: Long): Dp {
+    return max(360, (totalDays * 12).toInt()).dp
+}
+
+private fun tickOffset(canvasWidth: Dp, ratio: Float, isLast: Boolean): Dp {
+    val base = canvasWidth * ratio.coerceIn(0f, 1f)
+    return if (isLast) {
+        (base - 34.dp).coerceAtLeast(0.dp)
+    } else {
+        base
+    }
+}
+
 private fun buildStageTimeline(logs: List<LogWithImages>): List<StageTimelineItem> {
     if (logs.isEmpty()) return emptyList()
 
-    val stageRanges = mutableMapOf<String, Triple<LocalDate, LocalDate, Int>>()
+    data class StageAggregate(
+        val start: LocalDate,
+        val end: LocalDate,
+        val count: Int,
+        val latest: LocalDate
+    )
+
+    val stageRanges = mutableMapOf<String, StageAggregate>()
     logs.forEach { item ->
         val date = Instant.ofEpochMilli(item.log.date).atZone(ZoneId.systemDefault()).toLocalDate()
-        val stage = item.log.stage.ifBlank { estimateStageFromContent(item.log.content) }
+        val stage = resolveStageName(item)
         val current = stageRanges[stage]
         stageRanges[stage] = if (current == null) {
-            Triple(date, date, 1)
+            StageAggregate(date, date, 1, date)
         } else {
-            Triple(
-                minOf(current.first, date),
-                maxOf(current.second, date),
-                current.third + 1
+            StageAggregate(
+                start = minOf(current.start, date),
+                end = maxOf(current.end, date),
+                count = current.count + 1,
+                latest = maxOf(current.latest, date)
             )
         }
     }
 
-    val projectStart = stageRanges.values.minOf { it.first }
-    val projectEnd = stageRanges.values.maxOf { it.second }
-    val totalDays = (java.time.temporal.ChronoUnit.DAYS.between(projectStart, projectEnd) + 1).toFloat().coerceAtLeast(1f)
+    val projectStart = stageRanges.values.minOf { it.start }
+    val projectEnd = stageRanges.values.maxOf { it.end }
+    val totalDays = (ChronoUnit.DAYS.between(projectStart, projectEnd) + 1).toFloat().coerceAtLeast(1f)
+    val latestStageDate = stageRanges.values.maxOf { it.latest }
 
     return stageRanges.entries
-        .sortedBy { stageOrderIndex(it.key) }
+        .sortedWith(
+            compareBy<Map.Entry<String, StageAggregate>>(
+                { it.value.start },
+                { it.value.end },
+                { it.key }
+            )
+        )
         .map { (stage, range) ->
-            val startOffset = java.time.temporal.ChronoUnit.DAYS.between(projectStart, range.first).toFloat()
-            val widthDays = (java.time.temporal.ChronoUnit.DAYS.between(range.first, range.second) + 1).toFloat()
+            val startOffset = ChronoUnit.DAYS.between(projectStart, range.start).toFloat()
+            val widthDays = (ChronoUnit.DAYS.between(range.start, range.end) + 1).toFloat()
             StageTimelineItem(
                 stage = stage,
-                start = range.first,
-                end = range.second,
-                count = range.third,
+                start = range.start,
+                end = range.end,
+                count = range.count,
+                durationDays = widthDays.toLong(),
+                latestLogDate = range.latest,
+                isCurrent = range.latest == latestStageDate,
                 startRatio = startOffset / totalDays,
                 widthRatio = widthDays / totalDays
             )
         }
-}
-
-private fun stageOrderIndex(stage: String): Int {
-    val ordered = listOf("开工准备", "拆改阶段", "水电阶段", "泥瓦阶段", "木工阶段", "油工阶段", "安装阶段", "收尾验收")
-    val index = ordered.indexOf(stage)
-    return if (index >= 0) index else ordered.size + stage.hashCode().ushr(1)
 }
 
 private data class DayStat(val logCount: Int, val imageCount: Int)
