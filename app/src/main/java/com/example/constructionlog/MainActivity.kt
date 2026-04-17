@@ -924,16 +924,14 @@ class MainActivity : FragmentActivity() {
     private fun fetchWeatherForDate(targetDateMillis: Long, onSuccess: (String, String) -> Unit) {
         runOnIo(
             action = {
-                val amapKey = amapKeyStore.getApiKey()
-                    ?: throw IllegalStateException("请先在设置中配置高德天气 Key")
+                val amapKey = readAmapApiKey()
                 val location = getPreciseLocation() ?: throw IllegalStateException("未获取到当前位置")
-                val qWeatherKey = qWeatherKeyStore.getApiKey()
                 val qWeatherApiHost = qWeatherKeyStore.getApiHost()
                 val (weather, provider) = queryWeatherWithPriority(
                     latitude = location.latitude,
                     longitude = location.longitude,
                     amapKey = amapKey,
-                    qWeatherKey = qWeatherKey,
+                    qWeatherKeyProvider = ::readQWeatherApiKey,
                     qWeatherApiHost = qWeatherApiHost,
                     targetDateMillis = targetDateMillis
                 )
@@ -943,6 +941,22 @@ class MainActivity : FragmentActivity() {
             onSuccess = {},
             onError = { toast("自动获取天气失败: ${it.message}") }
         )
+    }
+
+    private fun readAmapApiKey(): String {
+        return try {
+            amapKeyStore.getApiKey()
+        } catch (_: Throwable) {
+            throw IllegalStateException("已保存的高德天气 Key 已失效，请到设置中重新保存")
+        } ?: throw IllegalStateException("请先在设置中配置高德天气 Key")
+    }
+
+    private fun readQWeatherApiKey(): String? {
+        return try {
+            qWeatherKeyStore.getApiKey()
+        } catch (_: Throwable) {
+            throw IllegalStateException("已保存的和风天气 Key 已失效，请到设置中重新保存")
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -1010,7 +1024,7 @@ class MainActivity : FragmentActivity() {
         latitude: Double,
         longitude: Double,
         amapKey: String,
-        qWeatherKey: String?,
+        qWeatherKeyProvider: () -> String?,
         qWeatherApiHost: String?,
         targetDateMillis: Long
     ): Pair<String, String> = withContext(Dispatchers.IO) {
@@ -1025,7 +1039,8 @@ class MainActivity : FragmentActivity() {
             if (daysAgo > 10) {
                 throw IllegalStateException("该日期已超过10天，请手动填写天气")
             }
-            val key = qWeatherKey ?: throw IllegalStateException("请先在设置中配置和风天气 Key（用于10天内历史天气）")
+            val key = qWeatherKeyProvider()
+                ?: throw IllegalStateException("请先在设置中配置和风天气 Key（用于10天内历史天气）")
             return@withContext queryQWeatherHistorical(latitude, longitude, key, targetDate, qWeatherApiHost) to "和风"
         }
 
